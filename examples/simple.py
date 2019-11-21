@@ -1,27 +1,11 @@
-import numpy as np
+from numpy import array
 
-from pagestore import Data, PageStore
+from pagestore import PageStore
 
-def mk_data(a,b,n,name):
-    idx=np.linspace(a,b,n)
-    rec=idx**3
-    return Data(idx,rec,name)
+db = PageStore("./localdb")
+db.store({"a": ([1, 2, 3], [0.1, 0.2, 0.3])})
+db.store({"a": ([3, 4, 5], [0.35, 0.45, 0.55])})
 
-data1=mk_data(0,10,11,'a')
-data2=mk_data(5,15,11,'a')
-data2.rec[:]=33
-data3, data4 =data1.merge(data2)
+res = db.get("a", 2, 4).to_dict()
 
-
-data3, data4 =data1.merge(data2)
-
-db=PageStore("testdb")
-
-db.store_data( mk_data(0.,1.,100,'a') )
-db.store_data( mk_data(0.5,1.5,100,'a') )
-
-db.store_data( mk_data(0.,1.,100,'b') )
-db.store_data( mk_data(0.5,1.5,100,'b') )
-
-
-db.delete()
+res == {"a": (array([2, 3, 4]), array([0.2, 0.3, 0.45]))}

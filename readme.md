@@ -45,8 +45,10 @@ Todo
 
 - [ ]  read-only modes
 - [ ]  optional copy on write mode
+- [ ]  protect private api
+- [ ]  test different datatypes for index and records
  
-- [ ]  (per variable) settings in the db 
+- [ ]  (per variable) settings in the db
 - [ ]  add hashing of pages
 - [ ]  add consistency check and recovery
 

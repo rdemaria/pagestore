@@ -1,1 +1,2 @@
+black */*.py *.py
 pytest --cov=pagestore --cov-report html
