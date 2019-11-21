@@ -37,7 +37,7 @@ class Page:
         return self.pageid,self.name,self.begin,self.end,self.count,self.size,self.idx_type
 
     def __repr__(self):
-        ss=', '.join(self.to_list())
+        ss=', '.join(map(str,self.to_list()))
         return f"Page({ss})"
 
     def get_prefix(self,basedir):
@@ -53,37 +53,62 @@ class Page:
         filename=self.get_prefix(basedir)+'.idx'
         return np.fromfile(filename, dtype=self.idx_type, count=self.count)
 
-    def read_rec(self,basedir):
-        filename=self.get_prefix(basedir)+'.rec'
-        return pickle.load(open(filename,'rb'))
-
-    def read_meta(self,basedir):
-        filename=self.get_prefix(basedir)+'.meta'
-        fh=open(filename,'w')
-        fh.write(repr(self))
-
     def write_idx(self,idx,basedir):
         filename=self.create_file(basedir,'.idx')
         idx.tofile(filename)
 
+    def read_rec(self,basedir):
+        filename=self.get_prefix(basedir)+'.rec'
+        return pickle.load(open(filename,'rb'))
+
     def write_rec(self,rec,basedir):
         filename=self.get_prefix(basedir)+'.rec'
-        return pickle.dump(open(filename,'wb'),rec)
+        pickle.dump(rec,open(filename,'wb'))
+
+    def read_meta(self,basedir):
+        filename=self.get_prefix(basedir)+'.page'
+        return pickle.load(open(filename,'rb'))
+
+    def write_meta(self,basedir):
+        filename=self.get_prefix(basedir)+'.page'
+        pickle.dump(self,open(filename,'wb'))
 
     def read(self,basedir):
         idx=self.read_idx(basedir)
         rec=self.read_rec(basedir)
         return Data(idx,rec,self.name)
 
+    def check(self,basedir):
+        page=self.read_meta(basedir)
+        self.compare(page)
+        data=self.read(basedir)
+        page=Page.from_data(self.pageid,data)
+        self.compare(page)
+
     def write(self,data,basedir):
-        self.write_idx(basedir,data.idx)
-        self.write_rec(basedir,data.rec)
+        self.write_idx(data.idx,basedir)
+        self.write_rec(data.rec,basedir)
         self.write_meta(basedir)
 
     def delete(self):
         os.unlink(self.get_prefix(basedir)+'.idx')
         os.unlink(self.get_prefix(basedir)+'.rec')
         os.unlink(self.get_prefix(basedir)+'.meta')
+
+    def check_with_data(self,data):
+        assert self.begin==data.idx[0]
+        assert self.end==data.idx[-1]
+        assert self.count==len(data)
+        assert self.size==data.get_size()
+        assert self.idx_type==data.idx.dtype.str
+        assert self.name==data.name
+
+    def compare(self,page):
+        for k in page.__dict__:
+            assert getattr(self,k)==getattr(page,k)
+
+
+
 
 
 

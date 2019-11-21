@@ -27,7 +27,6 @@ class PageStore:
         CREATE INDEX IF NOT EXISTS page_index ON pages(pageid);
         """
         self.db.executescript(sql)
-        self.db.commit()
 
     def insert_page(self,page):
         sql="""INSERT INTO pages VALUES

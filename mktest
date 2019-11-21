@@ -1,0 +1,1 @@
+pytest --cov=pagestore --cov-report html
