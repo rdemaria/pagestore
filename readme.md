@@ -17,21 +17,22 @@ SUMMARY:
          * it uses a .db to store page information and basedir to locate the data
 
 
-TODO FEATURES:
+TODO:
+
+    hashing data and consistency check
+
     read-only
-    replace pickle
     no page id recycling
+    history
+
     settings in the db (per variable)
-    hashing data
-    consistency check
+
 
     concurent usage (db locking)
-    history
     buffer
 
     xrootd support
     mysql support
 
 TODO OPTIMIZATION:
-    shortcut merge if no overlap
-    specialized record savings
+    replace pickle with specialized record savings

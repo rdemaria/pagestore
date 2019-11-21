@@ -1,8 +1,9 @@
 /build
 /dist
-/pytimber.egg-info
+/*.egg-info
 __pycache__
 *.pyc
 *.swp
 .ipynb_checkpoints
 /htmlcov
+.coverage

@@ -1,8 +1,11 @@
 import numpy as np
 
-from pagestore import Data, DataSet
+from pagestore import Data
 
-
+def mk_data(a,b,n,name):
+    idx=np.linspace(a,b,n)
+    rec=idx**3
+    return Data(idx,rec,name)
 
 def test_sort():
     idx=np.arange(0,100.)
@@ -49,6 +52,21 @@ def test_merge():
     for tt in [0,1,4,7,8]:
        ii=data4.idx==tt
        assert data4.rec[ii]==data4.idx[ii]**2
+
+def test_simplemerge():
+    data1=mk_data(0.,1.,100,'a')
+    data2=mk_data(2.,3.,100,'a')
+    data3, _ =data1.merge(data2)
+    data4, _ =data2.merge(data1)
+
+    assert np.all(data3.idx==data3.idx)
+
+
+def test_overlapmerge():
+    data1=mk_data(0,10,11,'a')
+    data2=mk_data(5,15,11,'a')
+    data3, data4 =data1.merge(data2)
+    assert np.all(data3.idx==np.linspace(0,15,16))
 
 
 def test_trim():
