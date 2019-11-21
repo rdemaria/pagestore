@@ -40,60 +40,60 @@ class Page:
         ss=', '.join(map(str,self.to_list()))
         return f"Page({ss})"
 
-    def get_prefix(self,basedir):
-        return os.path.join(basedir,num2path(self.pageid))
+    def get_prefix(self,pagedir):
+        return os.path.join(pagedir,num2path(self.pageid))
 
-    def create_file(self,basedir,extension):
-        filename=self.get_prefix(basedir)+extension
+    def create_file(self,pagedir,extension):
+        filename=self.get_prefix(pagedir)+extension
         head,tail= os.path.split(filename)
         os.makedirs(head,exist_ok=True)
         return filename
 
-    def read_idx(self,basedir):
-        filename=self.get_prefix(basedir)+'.idx'
+    def read_idx(self,pagedir):
+        filename=self.get_prefix(pagedir)+'.idx'
         return np.fromfile(filename, dtype=self.idx_type, count=self.count)
 
-    def write_idx(self,idx,basedir):
-        filename=self.create_file(basedir,'.idx')
+    def write_idx(self,idx,pagedir):
+        filename=self.create_file(pagedir,'.idx')
         idx.tofile(filename)
 
-    def read_rec(self,basedir):
-        filename=self.get_prefix(basedir)+'.rec'
+    def read_rec(self,pagedir):
+        filename=self.get_prefix(pagedir)+'.rec'
         return pickle.load(open(filename,'rb'))
 
-    def write_rec(self,rec,basedir):
-        filename=self.get_prefix(basedir)+'.rec'
+    def write_rec(self,rec,pagedir):
+        filename=self.get_prefix(pagedir)+'.rec'
         pickle.dump(rec,open(filename,'wb'))
 
-    def read_meta(self,basedir):
-        filename=self.get_prefix(basedir)+'.page'
+    def read_meta(self,pagedir):
+        filename=self.get_prefix(pagedir)+'.page'
         return pickle.load(open(filename,'rb'))
 
-    def write_meta(self,basedir):
-        filename=self.get_prefix(basedir)+'.page'
+    def write_meta(self,pagedir):
+        filename=self.get_prefix(pagedir)+'.page'
         pickle.dump(self,open(filename,'wb'))
 
-    def read(self,basedir):
-        idx=self.read_idx(basedir)
-        rec=self.read_rec(basedir)
+    def read(self,pagedir):
+        idx=self.read_idx(pagedir)
+        rec=self.read_rec(pagedir)
         return Data(idx,rec,self.name)
 
-    def check(self,basedir):
-        page=self.read_meta(basedir)
+    def check(self,pagedir):
+        page=self.read_meta(pagedir)
         self.compare(page)
-        data=self.read(basedir)
+        data=self.read(pagedir)
         page=Page.from_data(self.pageid,data)
         self.compare(page)
 
-    def write(self,data,basedir):
-        self.write_idx(data.idx,basedir)
-        self.write_rec(data.rec,basedir)
-        self.write_meta(basedir)
+    def write(self,data,pagedir):
+        self.write_idx(data.idx,pagedir)
+        self.write_rec(data.rec,pagedir)
+        self.write_meta(pagedir)
 
-    def delete(self):
-        os.unlink(self.get_prefix(basedir)+'.idx')
-        os.unlink(self.get_prefix(basedir)+'.rec')
-        os.unlink(self.get_prefix(basedir)+'.meta')
+    def delete(self,pagedir):
+        os.unlink(self.get_prefix(pagedir)+'.idx')
+        os.unlink(self.get_prefix(pagedir)+'.rec')
+        os.unlink(self.get_prefix(pagedir)+'.page')
 
     def check_with_data(self,data):
         assert self.begin==data.idx[0]
@@ -106,6 +106,7 @@ class Page:
     def compare(self,page):
         for k in page.__dict__:
             assert getattr(self,k)==getattr(page,k)
+        return True
 
 
 

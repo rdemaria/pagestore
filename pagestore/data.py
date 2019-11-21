@@ -9,6 +9,10 @@ Constraints:
 import numpy as np
 
 class Data:
+    @staticmethod
+    def is_data(data):
+        return  hasattr(data,'idx') and hasattr(data,'rec') and hasattr(data,'name')
+
     def __init__(self,idx,rec,name=''):
         self.idx=idx
         self.rec=rec

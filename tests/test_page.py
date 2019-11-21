@@ -47,6 +47,7 @@ def test_read_write(tmp_path):
     basedir=tmp_path
     page.write(data,basedir)
     page.check(basedir)
+    page.delete(basedir)
 
 
 

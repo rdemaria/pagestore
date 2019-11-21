@@ -1,4 +1,5 @@
-import sqlite3
+import os,sqlite3
+from shutil import rmtree
 
 import numpy as np
 
@@ -8,16 +9,24 @@ from .data import Data
 
 class PageStore:
 
-    def __init__(self,basedir,max_page_size=10000000):
-        self.basedir=basedir
-        self.db=sqlite3.connect(":memory:")
+    def __init__(self,pagedir,dbfile=None,max_page_size=10000000):
+        self.pagedir=pagedir
+        if dbfile is None:
+            dbfile=os.path.join(pagedir,'pagestore.db')
+        self.dbfile=dbfile
+        self.db=sqlite3.connect(self.dbfile)
         self.create_db()
         self.max_page_size=max_page_size
 
+    def delete(self):
+        os.unlink(self.dbfile)
+        rmtree(self.pagedir)
+
+    #  Database operations
     def create_db(self):
         sql="""
         CREATE TABLE IF NOT EXISTS pages(
-              pageid INTEGER,
+              pageid INTEGER PRIMARY KEY,
               name  STRING,
               begin   NUMERIC,
               end     NUMERIC,
@@ -28,15 +37,29 @@ class PageStore:
         """
         self.db.executescript(sql)
 
+    def new_pageid(self):
+        sql="""SELECT max(pageid)+1 FROM pages"""
+        res = self.db.execute(sql).fetchone()[0]
+        if res is None:
+            return 0
+        else:
+           return res
+
     def insert_page(self,page):
-        sql="""INSERT INTO pages VALUES
+        sql="""INSERT OR REPLACE INTO pages VALUES
                (?,?,?,?,?,?,?)"""
         self.db.execute(sql,page.to_list())
 
+    def remove_page(self,pageid):
+        """remove page from database"""
+        sql="""DELETE FROM pages WHERE pageid=?"""
+        self.db.execute(sql,(pageid,))
+
     def delete_page(self,page):
-        sql="""DELETE FROM pages WHERE pageid==?"""
-        self.db.execute(sql,(page.pageid,))
-        page.delete()
+        """remove page from database and deleta page data"""
+        self.remove_page(page.pageid)
+        page.delete(self.pagedir)
+
 
     def get_pages(self,name):
         sql="""select * FROM pages WHERE name = ?
@@ -44,70 +67,54 @@ class PageStore:
         return ( Page(*res) for res in self.db.execute(sql,(name,)) )
 
     def get_page_before(self,name,ii):
+        """get pages with begin before ii included"""
         sql="""select * FROM pages WHERE  name = ? AND begin <= ?
                ORDER BY begin DESC LIMIT 1"""
-        return  self.db.execute(sql,(name,ii)).fetchone()
+        res = self.db.execute(sql,(name,ii)).fetchone()
+        if res is not None:
+            return Page(*res)
 
     def count_pages(self,name):
         sql="""select count(*) FROM pages WHERE name = ?"""
-        return self.db.execute(sql).fetchone()[0]
+        return self.db.execute(sql,(name,)).fetchone()[0]
 
+    def get_page(self,pageid):
+        sql="""select * FROM pages WHERE pageid = ?"""
+        res= self.db.execute(sql,(pageid,)).fetchone()
+        if res is not None:
+            return Page(*res)
 
-    def new_pageid(self):
-        sql="""SELECT max(pageid)+1 FROM pages"""
-        return self.db.execute(sql).fetchone()
-
-    def check(self):
-        last=-np.infty
-        for page in self.pages:
-            if page.begin < last:
-                raise ValueError("page {page} collide")
-            last=page.end
-
-    def store(self, name, idx, rec=None):
-        data=Data(idx,rec,name)
-        data.sort()
-        if self.count_pages(name)==0:
-            self.new_page(0,data)
-        # find relevant pages
-        while len(data)>0:
-            page_before=self.get_page_before(data.begin())
-            page_after=self.get_page_after(data.begin())
-            if page_before is None:
-                # page_after must exists
-                curr,data=data.cut_lt(page_after.begin)
-                stage.append(self.merge_page(page_after,curr))
-            else:
-                if page_after is not None:
-                    curr,data=data.cut_lt(page_after.begin)
-                self.merge_page_data(page_before,idx)
-        self.rebalance(name)
-
+    #  End Database operations
 
     def new_page(self,pageid,data):
+        """store data in pageid"""
         page=Page.from_data(pageid,data)
-        page.write(data,self.basedir)
+        page.write(data,self.pagedir)
         self.insert_page(page)
 
     def merge_page_data(self,page,data):
-        data,replace=data.merge(page.read(self.basedir))
+        data,replace=data.merge(page.read(self.pagedir))
+        # pageid is recycled
         page=Page.from_data(page.pageid,data)
-        page.write(data,self.basedir)
+        page.write(data,self.pagedir)
         self.insert_page(page)
+        return page.pageid
 
     def merge_page_page(self,page1,page2):
-        data1=page1.read(self.basedir)
-        data2=page2.read(self.basedir)
-        data,replace=data.merge(data1,data2)
+        data1=page1.read(self.pagedir)
+        data2=page2.read(self.pagedir)
+        data,replace=data1.merge(data2)
+        # pageid of page1 is recycled, page2 dropped
         page=Page.from_data(page1.pageid,data)
-        page.write(data,self.basedir)
+        page.write(data,self.pagedir)
         self.insert_page(page)
         self.delete_page(page2)
+        return page.pageid
 
     def split_pages(self,name):
         for page in self.get_pages(name):
             if page.size >self.max_page_size:
-                data=page.read(self.basedir)
+                data=page.read(self.pagedir)
                 left,right=data.cut_nbytes(self.max_page_size)
                 self.new_page(pageid,left)
                 self.new_page(self.new_pageid(),right)
@@ -126,16 +133,66 @@ class PageStore:
         self.join_pages(name)
 
 
+    def store_data(self,data):
+        # make sure it is sorted
+        data.sort()
+        if self.count_pages(name)==0:
+            # first page in db
+            self.new_page(self.new_pageid(),data)
+            return
+        # find relevant pages
+        # each page convers the regions from the beginning of the page to
+        # the beginning of the next page excluded
+        # with the exception of the first page that covers everything before and
+        # and the last page that covers after
+        while len(data)>0:
+            # find the page before and after the beginnig of data
+            # there must at least be one page
+            page_before=self.get_page_before(data.begin())
+            page_after=self.get_page_after(data.begin())
+            if page_before is None:
+                # page_after must exists
+                # data before page.begin is pre-pended to page and the rest re-submitted
+                curr,data=data.cut_lt(page_after.begin)
+                self.merge_page(page_after,curr)
+            else:
+                # a page before exists
+                # if a page after exists data belonging to page_before is used and 
+                # the rest resubmitted otherwise everything is used
+                if page_after is not None:
+                    curr,data=data.cut_lt(page_after.begin)
+                self.merge_page_data(page_before,idx)
+        # by merging some pages might have grown too much,
+        # rebalance split and rejoin pages
+        self.rebalance(name)
+
+    def store(self, dataset):
+        for name,data in dataset.items():
+            if Data.is_data(data):
+                self.store_data(data)
+            else:
+                idx, rec=data
+                self.store_data(Data(idx,rec,name))
+
+    # Extraction methods
     def get(self,name):
         data=None
 
         for page in self.get_pages(name):
             if data is None:
-                data=page.read(self.basedir)
+                data=page.read(self.pagedir)
             else:
-                data.append(page.read(self.basedir))
+                data.append(page.read(self.pagedir))
 
         return data
 
+
+    # Consistency check
+    def check(self):
+        last=-np.infty
+        for page in self.pages:
+            if page.begin < last:
+                raise ValueError("page {page} collide")
+            last=page.end
 
 

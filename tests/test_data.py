@@ -10,8 +10,8 @@ def test_sort():
     data.idx[:10]+=101
     data.sort()
     assert len(data)==100
-    assert np.all(np.diff(data.idx)>0)
-    assert np.all(data.rec[:90]==data.idx[:90]**2)
+    assert all(np.diff(data.idx)>0)
+    assert all(data.rec[:90]==data.idx[:90]**2)
 
 def test_cut_idx():
     idx=np.arange(0,100.)
@@ -55,8 +55,8 @@ def test_trim():
     idx=np.arange(0,100.)
     data=Data(idx,idx**2,'test')
     data1=data.trim(13,15)
-    assert np.all(data1.idx==[13,14,15])
-    assert np.all(data1.rec==data1.idx**2)
+    assert all(data1.idx==[13,14,15])
+    assert all(data1.rec==data1.idx**2)
 
 def test_append():
     idx=np.arange(0,100.)
@@ -69,8 +69,8 @@ def test_filter():
     idx=np.arange(0,100.)
     data=Data(idx,idx**2,'test')
     data1=data.filter(data.rec%2==0)
-    assert np.all(data1.rec%2==0)
-    assert np.all(data1.rec==data1.idx**2)
+    assert all(data1.rec%2==0)
+    assert all(data1.rec==data1.idx**2)
 
 
 
