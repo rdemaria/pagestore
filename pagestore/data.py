@@ -1,3 +1,11 @@
+
+
+"""
+Constraints:
+    len(idx)==len(rec)
+    idx is sorted (assumed but not checked)
+"""
+
 import numpy as np
 
 class Data:
@@ -43,6 +51,9 @@ class Data:
         return Data(self.idx[idx],self.rec[idx],self.name)
 
     def merge(self,data):
+        """
+        return new data, and replaced data by merging self and data
+        """
         newindex=np.empty(len(data),dtype=self.idx.dtype)
         newrec=[]
         newidx=[]
@@ -51,6 +62,7 @@ class Data:
         ii=0;jj=0
         while ii<len(self.idx) and jj<len(data.idx):
             if self.idx[ii]==data.idx[jj]:
+                #replacing
                 newrec.append(data.rec[jj])
                 newidx.append(data.idx[jj])
                 oldrec.append(self.rec[ii])
@@ -59,18 +71,22 @@ class Data:
                 jj+=1
             else:
                 if self.idx[ii]<data.idx[jj]:
+                    #adding self
                     newrec.append(self.rec[ii])
                     newidx.append(self.idx[ii])
                     ii+=1
                 else:
+                    #adding data
                     newrec.append(data.rec[jj])
                     newidx.append(data.idx[jj])
                     jj+=1
         while ii<len(self.idx):
+            #finishing self
             newrec.append(self.rec[ii])
             newidx.append(self.idx[ii])
             ii+=1
         while jj<len(data.idx):
+            #finishing data
             newrec.append(data.rec[jj])
             newidx.append(data.idx[jj])
             jj+=1
@@ -84,13 +100,13 @@ class Data:
         return self.rec.nbytes
 
     def append(self,data):
-        self.idx=np.concatenate(self.idx,idx)
-        self.rec=np.concatenate(self.rec,rec)
+        self.idx=np.concatenate((self.idx,data.idx))
+        self.rec=np.concatenate((self.rec,data.rec))
         return self
 
     def trim(self,idx1,idx2):
         ii1=np.where( self.idx>=idx1 )[0][0]
-        ii2=np.where( self.idx<=idx2 )[0][-1]
+        ii2=np.where( self.idx<=idx2 )[0][-1]+1
         return Data(self.idx[ii1:ii2],self.rec[ii1:ii2],self.name)
 
     def compare(self,data):
