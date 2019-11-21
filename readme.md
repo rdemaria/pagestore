@@ -19,29 +19,6 @@ d.data('a',2,4).to_dict() == \
 
 ```
 
-<<<<<<< HEAD
-TODO:
-
-    hashing data and consistency check
-
-    read-only
-    no page id recycling
-    history
-
-    settings in the db (per variable)
-
-
-    concurent usage (db locking)
-    buffer
-=======
-
->>>>>>> 039c4e0c3c9a35245220ead75ea0f69852be046d
-
-
-<<<<<<< HEAD
-TODO OPTIMIZATION:
-    replace pickle with specialized record savings
-=======
 Structure
 ---------
 
@@ -74,11 +51,10 @@ Todo
 - [ ]  add consistency check and recovery
 
 - [ ]  concurent usage (db locking)
-- [ ]   history
-- [ ]    buffer
+- [ ]  history
+- [ ]  buffer
 
-- [ ]    xrootd support
-- [ ]    mysql support
+- [ ] xrootd support
+- [ ] mysql support
 
-- [ ]    replace pickle with specialized record savings
->>>>>>> 039c4e0c3c9a35245220ead75ea0f69852be046d
+- [ ]  replace pickle with specialized record savings
