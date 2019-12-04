@@ -73,10 +73,13 @@ class PageStore:
         page.delete(self.pagedir)
         self.db.commit()
 
-    def get_pages(self, name):
+    def gen_pages(self, name):
         sql = """select * FROM pages WHERE name = ?
                ORDER BY begin"""
         return (Page(*res) for res in self.db.execute(sql, (name,)))
+
+    def get_pages(self, name):
+        return list(self.gen_pages(name))
 
     def get_page_before(self, name, idx):
         """get pages with begin before ii included"""
@@ -115,6 +118,11 @@ class PageStore:
         res = self.db.execute(sql, (pageid,)).fetchone()
         if res is not None:
             return Page(*res)
+
+    def gen_pages_all(self):
+        sql = """select * FROM pages
+               ORDER BY begin"""
+        return (Page(*res) for res in self.db.execute(sql))
 
     def count_pages_all(self):
         sql = """select count(*) FROM pages"""
@@ -157,7 +165,7 @@ class PageStore:
         return page.pageid
 
     def split_pages(self, name):
-        for page in self.get_pages(name):
+        for page in self.gen_pages(name):
             if page.size > self.max_page_size:
                 data = page.read(self.pagedir)
                 left, right = data.cut_nbytes(self.max_page_size)
@@ -167,7 +175,7 @@ class PageStore:
                 self.new_page(self.new_pageid(), right)
 
     def join_pages(self, name):
-        pages = list(self.get_pages(name))
+        pages = list(self.gen_pages(name))
         for ii in range(len(pages)):
             for jj in range(1, len(pages) - ii):
                 if pages[ii].size + pages[ii + jj].size < self.max_page_size:
@@ -201,7 +209,7 @@ class PageStore:
                 # page_after must exists
                 # data before page.begin is pre-pended to page and the rest re-submitted
                 curr, data = data.cut_lt(page_after.begin)
-                self.merge_page(page_after, curr)
+                self.merge_page_data(page_after, curr)
             else:
                 # a page before exists
                 # if a page after exists data belonging to page_before is used and

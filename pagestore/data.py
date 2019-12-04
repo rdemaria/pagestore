@@ -52,8 +52,8 @@ class Data:
     def end(self):
         return self.idx[-1]
 
-    def filter(self, idx):
-        return Data(self.idx[idx], self.rec[idx], self.name)
+    def copy(self):
+        return Data(self.idx.copy(), self.rec.copy(), self.name)
 
     def merge(self, data):
         """
@@ -119,17 +119,124 @@ class Data:
     def append(self, data):
         self.idx = np.concatenate((self.idx, data.idx))
         self.rec = np.concatenate((self.rec, data.rec))
-        return self
+        # return self
 
     def concatenate(self, data):
         idx = np.concatenate((self.idx, data.idx))
         rec = np.concatenate((self.rec, data.rec))
         return Data(idx, rec, self.name)
 
+    def delete(self, idx1, idx2):
+        ii1 = np.where(self.idx >= idx1)[0][0]
+        ii2 = np.where(self.idx <= idx2)[0][-1] + 1
+        self.idx = self.idx[ii1:ii2]
+        self.rec = self.rec[ii1:ii2]
+        # return self
+
     def trim(self, idx1, idx2):
         ii1 = np.where(self.idx >= idx1)[0][0]
         ii2 = np.where(self.idx <= idx2)[0][-1] + 1
         return Data(self.idx[ii1:ii2], self.rec[ii1:ii2], self.name)
+
+    def filter(self, mask):
+        return Data(self.idx[mask], self.rec[mask], self.name)
+
+    def iterate(self, func=lambda i, r: (i, r), idx1=None, idx2=None):
+        for i, r in self.iter(idx1, idx2):
+            res = func(i, r)
+        return res
+
+    def iter(self, idx1=None, idx2=None):
+        ii1 = None if idx1 is None else np.where(self.idx >= idx1)[0][0]
+        ii2 = None if idx2 is None else np.where(self.idx <= idx2)[0][-1] + 1
+        for i, r in zip(self.idx[ii1:ii2], self.rec[ii1:ii2]):
+            yield i, r
+
+    def select(
+        self,
+        idx1=None,
+        idx2=None,
+        idx_test=None,
+        rec_test=None,
+        limit=None,
+        skip=0,
+        offset=0,
+    ):
+        """
+        Filter data based on the intersection of the following conditions
+          self.idx >= idx1
+          self.idx <= idx2
+          map(idx_test,self.idx)
+          map(rec_test,self.rec)
+
+        The data is them down selected based on:
+          idx[mask][offset:offset+limit:skip+1]
+          rec[mask][offset:offset+limit:skip+1]
+        """
+        mask = self.mask(idx1, idx2, idx_test, rec_test)
+        if limit is None:
+            limit = len(self.idx)
+        if filter is None:
+            ii1 = np.where(mask)[0][0]
+            ii2 = np.where(mask)[0][-1] + 1
+            idx = self.idx[ii1:ii2][offset : offset + limit : skip + 1]
+            rec = self.rec[ii1:ii2][offset : offset + limit : skip + 1]
+        else:
+            idx = self.idx[mask][offset : offset + limit : skip + 1]
+            rec = self.rec[mask][offset : offset + limit : skip + 1]
+        return Data(idx, rec, self.name)
+
+    def count(
+        self,
+        idx1=None,
+        idx2=None,
+        idx_test=None,
+        rec_test=None,
+        limit=None,
+        skip=0,
+        offset=0,
+    ):
+        """
+        Count data based on the intersection of the following conditions
+          self.idx >= idx1
+          self.idx <= idx2
+          map(idx_test,self.idx)
+          map(rec_test,self.rec)
+
+        The data is them down selected based on:
+          idx[offset:offset+limit:skip]
+        """
+        if limit is None:
+            limit = len(self.idx)
+        mask = self.mask(idx1, idx2, idx_test, rec_test)
+        return mask[offset : offset + limit : skip + 1].sum()
+
+    def mask(self, idx1=None, idx2=None, idx_test=None, rec_test=None):
+        """
+        Return boolean mask based on the intersection of the following conditions
+          self.idx >= idx1
+          self.idx <= idx2
+          filter(self.idx,self.rec)
+        """
+        mask = np.ones(len(self.idx), dtype=bool)
+        if idx1 is not None:
+            mask &= self.idx >= idx1
+        if idx2 is not None:
+            mask &= self.idx <= idx2
+        if idx_test is not None:
+            mask &= np.fromiter(map(idx_test, self.idx), dtype=bool)
+        if rec_test is not None:
+            mask &= np.fromiter(map(rec_test, self.rec), dtype=bool)
+        return mask
+
+    def mean(self):
+        return self.rec.mean(axis=0)
+
+    def std(self):
+        return self.rec.std(axis=0)
+
+    def sum(self):
+        return self.rec.sum(axis=0)
 
     def compare(self, data):
         assert len(self) == len(data)
@@ -169,17 +276,60 @@ class DataSet:
             data, replaced = self.dataset[data.name].merge(data)
         self.dataset[data.name] = data
 
-    def get(self, pattern_or_list, idx1, idx2):
+    def count(
+        self,
+        pattern_or_list=None,
+        idx1=None,
+        idx2=None,
+        idx_test=None,
+        rec_test=None,
+        limit=None,
+        skip=0,
+        offset=0,
+    ):
+        res = {
+            name: self.dataset[name].count(
+                idx1, idx2, idx_test, rec_test, limit, skip, offset
+            )
+            for name in self.search(pattern_or_list)
+        }
+        return res
+
+    def select(
+        self,
+        pattern_or_list=None,
+        idx1=None,
+        idx2=None,
+        idx_test=None,
+        rec_test=None,
+        limit=None,
+        skip=0,
+        offset=0,
+    ):
+        res = {
+            name: self.dataset[name].select(
+                idx1, idx2, idx_test, rec_test, limit, skip, offset
+            )
+            for name in self.search(pattern_or_list)
+        }
+        return DataSet(res)
+
+    def get(self, pattern_or_list=None, idx1=None, idx2=None):
         res = {self.get_data(name, idx1, idx2) for name in self.search(pattern_or_list)}
         return DataSet(res)
 
-    def get_data(self, name, idx1, idx2):
-        return self.dataset[name].trim(idx1, idx2)
+    def get_data(self, name, idx1, idx2, limit=None, filter=None, skip=1):
+        data = self.dataset[name].trim(
+            idx1, idx2, limit=limit, filter=filter, skip=skip
+        )
+        return data
 
     def search(self, pattern_or_list=""):
         if type(pattern_or_list) is str:
             pattern = pattern_or_list
             return [k for k in self if pattern in k]
+        elif pattern_or_list is None:
+            return list(self.dataset.keys())
         else:
             lst = pattern_or_list
             return [k for k in lst if k in self]

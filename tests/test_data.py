@@ -9,6 +9,10 @@ def mk_data(a, b, n, name):
     return Data(idx, rec, name)
 
 
+def check_data(data):
+    return all(data.rec == data.idx ** 3)
+
+
 def test_sort():
     idx = np.arange(0, 100.0)
     data = Data(idx, idx ** 2, "test")
@@ -88,8 +92,8 @@ def test_append():
     idx = np.arange(0, 100.0)
     data = Data(idx, idx ** 2, "test")
     left, right = data.cut_idx(50)
-    data2 = left.append(right)
-    assert data2.compare(data)
+    left.append(right)
+    assert left.compare(data)
 
 
 def test_filter():
@@ -98,3 +102,57 @@ def test_filter():
     data1 = data.filter(data.rec % 2 == 0)
     assert all(data1.rec % 2 == 0)
     assert all(data1.rec == data1.idx ** 2)
+
+
+def test_count():
+    data = mk_data(-40, 60, 101, "test")
+    assert data.count() == 101
+    assert data.count(idx1=0) == 61
+    assert data.count(idx2=0) == 41
+    assert data.count(limit=3) == 3
+    assert data.count(offset=3, limit=3) == 3
+    assert data.count(offset=3, limit=3, skip=1) == 2
+
+
+def test_mask():
+    data = mk_data(-40, 60, 101, "test")
+    mask = data.mask(idx_test=lambda rec: rec % 2)
+    assert (data.filter(mask).rec % 2).all()
+    assert check_data(data.filter(mask))
+    mask = data.mask(idx_test=lambda idx: idx % 3)
+    assert (data.filter(mask).idx % 3).all()
+    assert check_data(data.filter(mask))
+
+
+def test_select():
+    data = mk_data(-4, 6, 11, "test")
+    assert all(data.select().idx == data.idx)
+    assert all(data.select().rec == data.rec)
+    assert all(data.select(limit=1).idx == data.idx[0:1])
+    assert all(data.select(limit=1).rec == data.rec[0:1])
+    assert all(data.select(offset=1, limit=1).idx == data.idx[1:2])
+    assert all(data.select(offset=1, limit=1).rec == data.rec[1:2])
+    assert all(data.select(offset=1, limit=3, skip=1).idx == data.idx[1:4:2])
+    assert all(data.select(offset=1, limit=3, skip=1).rec == data.rec[1:4:2])
+    assert all(data.select(0, 3).idx == np.array([0, 1, 2, 3]))
+
+
+def test_iter():
+    data = mk_data(-4, 6, 11, "test")
+    for i, r in data.iter(0, 3):
+        assert r == i ** 3
+
+
+def test_iterate():
+    class avg:
+        def __init__(self):
+            self.n = 0
+            self.s = 0
+
+        def __call__(self, i, r):
+            self.n += 1
+            self.s += r
+            return self.s / self.n
+
+    data = mk_data(-4, 6, 11, "test")
+    assert data.iterate(avg()) == data.mean()

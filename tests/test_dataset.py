@@ -9,6 +9,13 @@ def mk_data(a, b, n, name):
     return Data(idx, rec, name)
 
 
+def mk_dataset():
+    data1 = mk_data(1.0, 2.0, 7, "a")
+    data2 = mk_data(1.0, 2.0, 10, "b")
+    ds = data1 + data2
+    return ds
+
+
 def test_store():
     data1 = mk_data(1.0, 2.0, 10, "a")
     data2 = mk_data(1.0, 2.0, 10, "b")
@@ -19,7 +26,13 @@ def test_store():
 
 
 def test_add():
-    data1 = mk_data(1.0, 2.0, 10, "a")
+    data1 = mk_data(1.0, 2.0, 7, "a")
     data2 = mk_data(1.0, 2.0, 10, "b")
     ds = data1 + data2
     assert ds.search() == ["a", "b"]
+
+
+def test_count():
+    ds = mk_dataset()
+    assert ds.count()["a"] == 7
+    assert ds.count()["b"] == 10

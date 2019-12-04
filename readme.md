@@ -39,9 +39,12 @@ Structure
    * keeps pages not overlapping and within a given pagesize
    * it uses an sqlite database to store page information and a set of file in `pagedir` to store the data
 
-
 Todo
 ---------
+
+- [ ]  review extraction/search api (collect, count, iter first)
+- [ ]  delete records
+- [ ]  date time functions
 
 - [ ]  read-only modes
 - [ ]  optional copy on write mode
