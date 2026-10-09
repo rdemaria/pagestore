@@ -1,2 +1,4 @@
-black */*.py *.py
-pytest --cov=pagestore --cov-report html
+#!/bin/sh
+set -eu
+
+python -m pytest --cov=pagestore --cov-report=html "$@"

@@ -2,7 +2,41 @@
 
 PageStore stores named time series in immutable, checksummed array pages. The new
 API uses a filesystem catalog with per-signal coordination and no SQLite index.
-The design and remaining milestones are documented in [architecture.md](architecture.md).
+The design and remaining milestones are documented in
+[architecture.md](https://github.com/rdemaria/pagestore/blob/main/architecture.md).
+
+## Installation and development
+
+Requires Python 3.10 or newer. Install from PyPI with:
+
+```sh
+python -m pip install pagestore
+```
+
+NumPy is installed automatically. From a checkout, install with:
+
+```sh
+python -m pip install .
+```
+
+For an editable development installation and the test suite:
+
+```sh
+python -m pip install -e ".[testing]"
+python -m pytest -q
+```
+
+`sh mktest` also writes an HTML coverage report to `htmlcov/`. Build and validate
+the source distribution and wheel with:
+
+```sh
+python -m pip install build twine
+python -m build
+python -m twine check dist/*
+```
+
+Packaging is configured in `pyproject.toml`; the version comes from
+`pagestore/version.py`. Both distributions include the legacy namespace.
 
 ## Store and read
 
@@ -164,7 +198,9 @@ from pagestore.legacy import PageStore, Page, Data, DataSet
 ```
 
 The old SQLite/pickle implementation and existing file format remain available
-only through this namespace. Its [original README](pagestore/legacy/README.md)
-and [examples](examples/legacy/) are retained. Open only trusted legacy files;
+only through this namespace. Its
+[original README](https://github.com/rdemaria/pagestore/blob/main/pagestore/legacy/README.md)
+and [examples](https://github.com/rdemaria/pagestore/tree/main/examples/legacy/)
+are retained. Open only trusted legacy files;
 the new `DB` neither opens nor modifies that format. Copy legacy measurements
 explicitly into a separate new database when needed.

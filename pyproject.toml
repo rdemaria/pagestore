@@ -1,0 +1,42 @@
+[build-system]
+requires = ["setuptools>=77.0.3"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pagestore"
+dynamic = ["version"]
+description = "Time-series storage in immutable, checksummed array pages"
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [
+    {name = "Riccardo De Maria", email = "riccardo.de.maria@cern.ch"},
+]
+dependencies = ["numpy"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Topic :: Database",
+    "Topic :: Scientific/Engineering",
+]
+
+[project.optional-dependencies]
+testing = ["pytest", "pytest-cov"]
+
+[project.urls]
+Homepage = "https://github.com/rdemaria/pagestore"
+Repository = "https://github.com/rdemaria/pagestore"
+Issues = "https://github.com/rdemaria/pagestore/issues"
+
+[tool.setuptools]
+include-package-data = false
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["pagestore", "pagestore.*"]
+namespaces = false
+
+[tool.setuptools.package-data]
+"pagestore.legacy" = ["README.md"]
+
+[tool.setuptools.dynamic]
+version = {attr = "pagestore.version.__version__"}
