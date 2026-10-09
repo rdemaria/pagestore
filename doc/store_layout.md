@@ -183,6 +183,24 @@ applies to data pages; recovery checkpoints describing many pages can be larger.
 
 ## Recovery pages and integrity
 
+For low-level assessment of one measurement page, use the public
+`pagestore.read_page(path)` function:
+
+```python
+from pagestore import read_page
+
+name, timestamps, records = read_page("./anonymous-page.pg")
+```
+
+It needs no database directory or recovery record. It checks both header copies,
+every section hash, the whole-page SHA-256, signal identity, and record consistency
+before returning data. Corruption raises `CorruptionError`; an intact recovery
+page raises `ValueError`. It does not repair files. The arrays own writable,
+native-endian memory; ragged records are an object array of NumPy arrays. Numeric
+axes retain their numeric dtype and datetimes are UTC `datetime64[ns]`. Successful
+verification establishes page integrity, not its former commit status. Damaged
+envelopes require the explicit salvage operation described below.
+
 Recovery pages use the same binary container, but their payload is a JSON recovery
 record stored as a byte-array section. Each successfully acknowledged commit has
 two copies:
@@ -199,7 +217,59 @@ These records establish which data pages belong to committed versions. A complet
 set of data and recovery pages can reconstruct the database even if the JSON
 metadata and original directory layout are lost. Measurement pages alone cannot
 distinguish an active page from an uncommitted upload or a retired version.
-Recovery creates a separate destination and rebuilds its indexes and name catalog.
+`maintenance.recover` creates a separate destination and rebuilds its indexes and
+name catalog from those confirmed records. It preserves committed-state semantics
+and reports an incomplete reconstruction if required pages or recovery records
+are missing.
+
+There is a separate catastrophic-loss operation,
+`maintenance.salvage(source, destination)`. It needs only measurement pages: no
+`store.json`, HEADs, manifests, indexes, name catalog, or recovery records. Each
+data page already contains enough information to validate its arrays, identify
+its signal, and interpret its timestamps and values. This operation adds no
+metadata or work to ordinary writes.
+
+Salvage fully verifies every selected page. Intact pages are copied byte-for-byte,
+then indexed in a new store with fresh commits and recovery records. Their embedded
+database UUID is retained so their bytes can be reused. The new store infers its
+coordination profile, defaults to 8 MiB data pages, and takes each signal's page-size
+setting from the largest setting recorded in its selected pages; the original
+current configuration is not assumed recoverable. Pages from different database
+UUIDs require separate salvage runs.
+
+Use `reuse="hardlink"` to reuse intact files without copying payload bytes on a
+filesystem supporting hard links. This requires the same filesystem and continued
+immutability of the shared source files. Unsupported linking fails explicitly;
+it never silently starts a large copy. Damaged envelopes are repaired into new
+files even in hardlink mode. The source must be quiescent and is not overwritten.
+
+When one header survives, payload sections can still be checked independently.
+Salvage can rebuild damaged prefix/header/trailer/padding bytes. A truncated
+metadata-only tail can also be reconstructed if the primary header and all array
+bytes survive. If the original whole-page digest survives, the repair must
+reproduce it. If that digest is lost, salvage may generate a new envelope digest
+only after verifying every array against an intact header; this is explicitly
+listed under `regenerated_digests` in the report. Strict committed-state recovery
+continues to require its trusted original digest. Payload damage, missing array
+bytes, or loss of both usable header copies causes the affected page to be rejected.
+
+Verified data does not establish the original commit status. Salvage may include
+retired or uncommitted pages, and cannot know about completely missing pages.
+Identical copies of a page are deduplicated. If candidate pages for one signal
+overlap in time, disagree on timestamp kind, or give conflicting contents for one
+page ID, the entire signal is excluded and its candidate paths are reported.
+Salvage never guesses the latest version. Supply `pages=[...]` with an explicit
+selection in a new run to resolve conflicts. Valid pages from other signals can
+still be salvaged; rejecting a damaged page may leave a gap within a signal.
+
+`SalvageReport.ok` means the supplied candidates were processed without rejections,
+conflicts, or errors; it does not assert historical completeness. The report always
+labels original commit status as `unknown`. `salvage-report.json` records exclusions,
+repairs, and counts; `salvage-pages.jsonl` maps imported source files to destination
+pages and new commit IDs. Metadata is temporarily partitioned into 256 files to
+avoid holding the whole store's descriptor inventory in memory. Memory still scales
+with the largest partition, and an unusually large single signal can dominate it.
+Use `scratch_directory=` to choose the temporary inventory location.
 
 Duplicate headers and recovery records protect metadata; they do not duplicate
 measurement payloads. Hashes detect payload damage, but repairing damaged
@@ -218,4 +288,5 @@ the [benchmark results](../benchmarks/README.md) for measured whole-store costs.
 The implementation lives in [db.py](../pagestore/db.py),
 [name_catalog.py](../pagestore/name_catalog.py),
 [page_index.py](../pagestore/page_index.py), and
-[page_format.py](../pagestore/page_format.py).
+[page_format.py](../pagestore/page_format.py). Data-only salvage is implemented in
+[salvage.py](../pagestore/salvage.py).

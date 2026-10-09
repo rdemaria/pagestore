@@ -17,6 +17,18 @@
 
 ### Added
 
+- Public `read_page(path)` returns a signal name, timestamps, and records from a
+  standalone measurement page after verifying every section and the whole-page
+  SHA-256. It requires no database metadata, returns owned arrays, and reports
+  corruption without modifying the file.
+- `maintenance.salvage()` reconstructs a new store from verified measurement pages
+  without original catalogs or recovery records. It preserves intact page bytes,
+  optionally reuses them through hard links, reports overlapping versions for
+  explicit page selection, and writes a provenance log and `SalvageReport`.
+- Catastrophic-loss salvage can rebuild a damaged envelope or missing metadata
+  tail from an intact header and fully verified arrays. Regenerated whole-page
+  digests are reported explicitly; strict recovery keeps its trusted-digest rule.
+  Normal page encoding and write publication are unchanged.
 - [Store layout documentation](doc/store_layout.md) and repository conventions in
   `AGENT.md`, including the requirement to maintain the layout alongside format
   changes.
@@ -29,8 +41,8 @@
 - Reproducible million-signal creation, cache-memory, and search benchmarks, with
   measured results in [benchmarks/README.md](benchmarks/README.md).
 - Tests for cache refresh, parallel creation, interrupted publication, corruption,
-  catalog repair, and readers encountering retired shards. The suite passes 115
-  tests.
+  catalog repair, readers encountering retired shards, and standalone data-page
+  salvage after loss of catalogs and recovery records.
 
 ### Compatibility
 

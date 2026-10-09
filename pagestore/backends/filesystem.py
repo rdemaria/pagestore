@@ -192,6 +192,19 @@ class FileBackend:
         path.unlink(missing_ok=True)
         self._sync_dir(path.parent)
 
+    def link(self, source, key):
+        """Publish a hard link to a verified, quiescent immutable source page.
+
+        Explicitly requested by salvage only. Never fall back to a potentially
+        enormous copy when linking is unsupported or crosses filesystems.
+        """
+        self._require_write()
+        path = self.path(key)
+        self.mkdir(path.parent)
+        os.link(source, path, follow_symlinks=False)
+        self._sync_dir(path.parent)
+        self.metrics["publications"] += 1
+
     @contextmanager
     def lock(self, key, *, family=None):
         self._require_write()

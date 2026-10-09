@@ -41,6 +41,10 @@ The following decisions guide the implementation:
 - A complete set of finalized page files, including redundant recovery pages,
   must reconstruct acknowledged database state without `store.json`, HEADs,
   manifests, or the original directory layout.
+- Independently support catastrophic-loss salvage from measurement pages alone:
+  each page must identify its signal and timestamp semantics and verify its own
+  arrays. Reuse verified page bytes to create a new database, reporting damage
+  and unresolved overlaps without claiming the original committed state.
 - Give each bulk worker independent per-signal ownership; there is no global
   writer lock or global catalog update for each batch of an existing signal.
   New signal creation is rare and may pay for a shared discovery-catalog update.
@@ -958,6 +962,15 @@ corrupt live data. Do not silently promote the newest-looking orphan manifest.
 
 ### Reconstruction from pages
 
+Expose `pagestore.read_page(path) -> (signal_name, timestamps, records)` for
+standalone recovery assessments. Always verify both headers, all section hashes,
+the whole-page digest, and signal/record consistency. Return owned native-endian
+arrays, with an object array for ragged records, matching eager signal reads.
+Raise `CorruptionError` for corruption and `ValueError` for intact recovery pages.
+This operation needs no database, performs no repairs, and makes no claim about
+the page's former commit status. The internal mapped codec remains separate so
+ordinary partial reads do not acquire a full-payload verification cost.
+
 Provide `maintenance.recover(source, destination)` as an offline operation that
 creates a separate database and a machine-readable recovery report. The input
 can be a store or a directory of finalized `.pg` files collected without their
@@ -1002,11 +1015,44 @@ its commit race.
 
 If the newest state requires irreparable pages or missing recovery deltas, return
 an incomplete recovery report instead of a successful complete reconstruction.
-An explicit salvage mode
-may export verified records or restore a chosen older complete snapshot, labeling
-its missing ranges, unknown commit status and rollback. If all recovery copies for
-a generation are lost, data-page metadata can still identify and decode records,
-but cannot in general reconstruct that generation's exact overwrite decisions.
+`maintenance.salvage(source, destination, *, pages=None, reuse="copy",
+scratch_directory=None)` separately imports independently verified measurement
+pages. It requires no recovery records, root metadata, manifests, indexes, or
+original filenames. Normal writes retain the existing format and commit protocol;
+the self-describing headers and section hashes already provide the required data.
+
+Salvage verifies all array sections, timestamps, shapes, statistics, and identity.
+It deduplicates identical copies, excludes an entire signal on overlapping page
+intervals, conflicting timestamp kinds, or conflicting contents for the same page
+ID, and reports candidate paths for explicit selection with `pages=[...]`. Other
+signals proceed. Valid orphan or retired pages may be included: original commit
+status and historical completeness are always unknown. Missing/corrupt pages are
+reported, and missing pages without any surviving evidence cannot be detected.
+
+Intact data pages are reused byte-for-byte in a new store retaining their embedded
+database UUID, with fresh configuration, index nodes, commits, and recovery pages.
+Different source database UUIDs require separate runs. `reuse="hardlink"` avoids
+payload copies on a supporting filesystem; it requires immutable, quiescent
+sources on that filesystem and has no automatic copy fallback. Repaired envelopes
+always produce new files. The default new page limit is 8 MiB; each signal uses
+the largest configured limit found in its selected pages, because the former
+current setting cannot be inferred reliably from data pages alone.
+
+One intact header and all verified array bytes can support metadata repair,
+including rebuilding a truncated metadata-only tail. A surviving original page
+digest must be reproduced for strict metadata repair. Explicit salvage may replace
+a lost digest after validating all sections, while labeling that weaker evidence
+in `regenerated_digests`; it never promotes missing or damaged array bytes. Strict
+committed-state recovery retains its original digest requirement. No extra
+redundancy or hashing is added to ordinary writes for this salvage path.
+
+Save `salvage-report.json` and a per-page provenance log `salvage-pages.jsonl` in
+the destination. `SalvageReport.ok` describes processing of supplied candidates,
+not recovery of an unknown original state. The inventory is spooled into 256
+temporary metadata partitions, with memory proportional to the largest partition;
+very large individual signals may still require substantial memory. Expose
+`scratch_directory` for placement of that inventory. Preserve source files and
+require a new destination outside their directory tree.
 
 Duplicate headers protect against localized metadata damage. Separate recovery
 copies protect against loss/corruption of one snapshot file; keep them in distinct
@@ -1212,6 +1258,9 @@ records, per-signal page limits, the binary envelope and SHA-256 checks, durable
 filesystem publication, an immutable copy-on-write page index, metadata queries,
 streaming bulk ingestion, paired checkpoint/delta recovery, failure outcome
 reporting, and reconstruction into a new directory from flattened pages alone.
+Separate data-page salvage imports independently verified measurements without
+commit records, reports ambiguous overlaps, and supports byte-for-byte copying
+or explicit hardlink reuse without changing the normal write path.
 `db.check(full=True)`, `db.checkpoint(name)`, and `db.repair_recovery(name)` expose
 verification and recovery maintenance. `pagestore.maintenance.recover` returns a
 structured report and writes `recovery-report.json` into a created destination.

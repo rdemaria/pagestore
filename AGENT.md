@@ -9,6 +9,9 @@
 - Use file-based metadata, not SQLite or pickle, in the new store. Preserve explicit
   endianness, integrity hashes, redundant recovery metadata, and reconstruction
   from data/recovery pages alone. Do not weaken durability to improve benchmarks.
+- Keep committed-state recovery separate from data-only catastrophic salvage.
+  Data pages must independently identify and verify measurements. Report overlapping
+  versions for explicit selection; never guess which version was current.
 - Plain paths select filesystem storage; infer its profile. Datetime input defaults
   to UTC, with explicit timezone selection. The default data-page limit is 8 MiB
   and can be overridden per signal.

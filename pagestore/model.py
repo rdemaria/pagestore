@@ -210,6 +210,32 @@ class RecoveryReport:
         return not self.errors
 
 
+@dataclass
+class SalvageReport:
+    """Results for supplied pages; original commit status/completeness is unknown."""
+
+    destination: str
+    source_database_id: str | None = None
+    commit_status: str = "unknown"
+    salvaged_signals: list[str] = field(default_factory=list)
+    salvaged_pages: int = 0
+    salvaged_records: int = 0
+    copied_pages: int = 0
+    linked_pages: int = 0
+    duplicate_pages: int = 0
+    ignored_recovery_pages: int = 0
+    rejected_pages: dict[str, str] = field(default_factory=dict)
+    conflicts: dict[str, list[str]] = field(default_factory=dict)
+    repaired_pages: list[str] = field(default_factory=list)
+    regenerated_digests: list[str] = field(default_factory=list)
+    errors: list[str] = field(default_factory=list)
+
+    @property
+    def ok(self):
+        """All supplied data candidates were usable; not proof of historical completeness."""
+        return not (self.errors or self.conflicts or self.rejected_pages)
+
+
 def schema_key(batch):
     s = batch.schema
     return s["layout"], s["dtype"], tuple(s["shape"])

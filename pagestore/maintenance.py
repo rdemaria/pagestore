@@ -10,6 +10,7 @@ from .errors import CorruptionError
 from .model import CheckReport, RecoveryReport
 from .page_format import decode, read_page, repair_bytes
 from .page_index import PageIndex
+from .salvage import salvage
 
 
 def check(db, *, full=False):

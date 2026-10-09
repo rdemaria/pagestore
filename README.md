@@ -173,6 +173,21 @@ with db.iter_signal("signal", skip=1) as stream:
 
 ## Integrity and recovery
 
+Read and fully verify a single measurement page without opening a database:
+
+```python
+from pagestore import read_page
+
+name, timestamps, records = read_page("./surviving-page.pg")
+```
+
+This checks both headers, every array section, and the whole-page SHA-256, and
+raises `CorruptionError` on corruption. It performs no writes or repairs. Returned
+arrays own writable, native-endian memory, as with `get_signal`; ragged records
+use an object array of NumPy arrays. Datetimes retain UTC `datetime64[ns]` semantics.
+An intact recovery page raises `ValueError` because it contains no measurements.
+Use `salvage` below to assess and import recoverable damaged envelopes.
+
 Each page contains two header copies, section hashes, and an embedded whole-page
 SHA-256. Paired recovery pages describe confirmed commits. Ordinary mapped reads
 validate metadata; explicitly verify all payload bytes with `db.check(full=True)`.
@@ -193,6 +208,36 @@ repaired pages, and unconfirmed orphan pages that were excluded from live data.
 Use `db.checkpoint(name)` to create a fresh recovery checkpoint. Obsolete measurement,
 index, manifest, and recovery files are retained; their automatic reclamation is
 not implemented. Replaced, derived name-catalog shards are reclaimed automatically.
+
+For catastrophic loss where only measurement pages survive, use the separate
+salvage operation:
+
+```python
+from pagestore.maintenance import salvage
+
+report = salvage("./surviving-pages", "./salvaged")
+print(report.salvaged_signals, report.rejected_pages, report.conflicts)
+```
+
+It verifies each data page using its own headers and hashes, preserves signal
+names and timestamp semantics, and reuses intact page bytes in a new store. No
+original catalog or recovery file is needed. Damaged metadata can be reconstructed
+from a surviving header and verified arrays; pages with damaged payloads are
+excluded and reported. A lost whole-page digest can be regenerated only after all
+sections pass verification, with the result recorded explicitly.
+
+Salvage cannot establish which pages were committed or whether pages are missing.
+Overlapping versions exclude the affected signal until you select pages explicitly:
+`salvage(source, another_new_destination, pages=["chosen-page.pg", ...])`.
+Other valid signals can still be imported. `report.ok` describes the supplied
+pages, not completeness of the original database.
+
+The default copies intact files byte-for-byte. `reuse="hardlink"` avoids payload
+copies on the same filesystem; shared source files must remain immutable. It
+never falls back silently to copying if linking fails. Repaired pages always get
+new files. Sources must be quiescent and destinations new. Reports and per-page
+provenance are saved in the destination. See [the store layout](doc/store_layout.md)
+for details and temporary-inventory sizing.
 
 ## Filesystems and current scope
 

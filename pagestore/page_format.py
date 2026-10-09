@@ -399,8 +399,71 @@ def read_page(path, *, full=False, expected=None, allow_damaged_envelope=False):
     )
 
 
-def repair_bytes(page, expected=None):
-    """Repair metadata only, requiring the reconstructed original whole-page hash."""
+def read_salvage_page(path):
+    """Fully validate standalone arrays, tolerating a missing metadata-only tail.
+
+    No ordinary read or strict recovery uses this fallback. A truncated payload
+    cannot pass: every array byte must exist and match its intact header's hash.
+    """
+    try:
+        return read_page(path, full=True, allow_damaged_envelope=True)
+    except CorruptionError as original:
+        # Only rebuild a truncated backup/trailer after validating the primary
+        # header. Missing array bytes or a lost primary header remain errors.
+        with Path(path).open("rb") as stream:
+            if stream.seek(0, 2) < PREFIX.size:
+                raise original
+            buf = mmap.mmap(stream.fileno(), 0, access=mmap.ACCESS_READ)
+        try:
+            magic, version, flags, length = PREFIX.unpack_from(buf)
+            primary = _header_copy(buf, PREFIX.size, length)
+            if (magic, version, flags) != (MAGIC, VERSION, 0) or primary is None:
+                raise original
+            raw, h = primary
+            end = max(s["offset"] + s["length"] for s in h["sections"])
+            backup = h["backup_offset"]
+            flen = h["file_length"]
+            if (
+                flen <= len(buf)
+                or end > len(buf)
+                or backup != align(end)
+                or flen != backup + len(raw) + 32 + TRAILER.size
+            ):
+                raise original
+            repaired = bytearray(flen)
+            repaired[: len(buf)] = buf
+            hh = hashlib.sha256(raw).digest()
+            repaired[backup : backup + len(raw) + 32] = raw + hh
+            repaired[-TRAILER.size :] = TRAILER.pack(
+                END_MAGIC,
+                VERSION,
+                0,
+                len(raw),
+                backup,
+                flen,
+                b"\0" * 32,
+                hh,
+                b"\0" * 32,
+            )
+            # The missing whole-page digest remains explicitly untrusted. Full
+            # decoding verifies sections and semantics before repair can proceed.
+            return decode(repaired, full=True, allow_damaged_envelope=True)
+        except (ValueError, TypeError, KeyError, OverflowError, struct.error) as exc:
+            raise CorruptionError("Cannot salvage truncated page envelope") from exc
+
+
+def repair_bytes(page, expected=None, *, allow_new_digest=False):
+    """Repair metadata, normally requiring the original whole-page hash.
+
+    Explicit salvage may allow a new digest after validating every section against
+    an intact header. It cannot then claim the original envelope was recovered.
+    Strict committed-state recovery never enables this option.
+    """
+    if allow_new_digest and expected is not None:
+        raise ValueError("Cannot replace a trusted expected page digest")
+    if allow_new_digest:
+        # Do not trust a caller to have used full=True before authorizing salvage.
+        page = decode(page.buffer, full=True, allow_damaged_envelope=True)
     if not page.damaged_envelope:
         return bytes(page.buffer)
     h = page.header
@@ -429,7 +492,7 @@ def repair_bytes(page, expected=None):
     )
     repaired[-TRAILER.size : -32] = trailer[:-32]
     candidate = digest(memoryview(repaired)[:-32])
-    if candidate != (expected or page.sha256):
+    if not allow_new_digest and candidate != (expected or page.sha256):
         raise CorruptionError(
             "Metadata repair cannot reproduce the trusted page digest"
         )
