@@ -7,7 +7,7 @@ from pagestore.page_format import data_plan, decode, read_page
 
 
 def test_explicit_storage_declarations_and_contradictions(tmp_path):
-    with DB(tmp_path / "db") as db:
+    with DB(tmp_path / "db", mode="a") as db:
         db.store({"x": (np.array([1, 2], dtype=">i8"), np.array([3, 4], dtype=">f4"))})
         manifest, _ = db._head("x")
         descriptor = next(db._index(manifest).pages())
@@ -26,14 +26,14 @@ def test_explicit_storage_declarations_and_contradictions(tmp_path):
 
 def test_boolean_bytes_are_canonicalized(tmp_path):
     values = np.array([0, 2, 255], dtype="u1").view("?")
-    with DB(tmp_path / "db") as db:
+    with DB(tmp_path / "db", mode="a") as db:
         db.store({"x": ([1, 2, 3], values)})
         assert db.get_signal("x")[1].tolist() == [False, True, True]
         assert db.check(full=True).ok
 
 
 def test_truncation_and_both_headers_destroyed(tmp_path):
-    with DB(tmp_path / "db") as db:
+    with DB(tmp_path / "db", mode="a") as db:
         db.store({"x": ([1], [2])})
         manifest, _ = db._head("x")
         d = next(db._index(manifest).pages())

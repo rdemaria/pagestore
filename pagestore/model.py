@@ -40,6 +40,14 @@ def value_dtype(dtype):
 
 @dataclass
 class RaggedArray:
+    """Variable-length array records with a common dtype and trailing shape.
+
+    ``values`` concatenates records along its first dimension; unsigned integer
+    ``offsets`` has N+1 entries, starts at zero, and ends at len(values). Equal
+    consecutive offsets represent empty records. Construction validates offsets
+    and the supported value dtype; it may share input array memory.
+    """
+
     values: np.ndarray
     offsets: np.ndarray
 
@@ -65,9 +73,11 @@ class RaggedArray:
         return len(self.offsets) - 1
 
     def record(self, index):
+        """Return a view of the record at a nonnegative integer index."""
         return self.values[int(self.offsets[index]) : int(self.offsets[index + 1])]
 
     def take(self, indices):
+        """Select records by slice or integer indices, sharing contiguous payloads."""
         if isinstance(indices, slice):
             start, end, step = indices.indices(len(self))
             if step == 1:
@@ -90,6 +100,11 @@ class RaggedArray:
 
     @classmethod
     def from_arrays(cls, records):
+        """Concatenate array records with equal dtypes and trailing dimensions.
+
+        Each record must have a leading variable-length dimension. Empty input
+        yields an empty float64 RaggedArray. Scalar records are not ragged arrays.
+        """
         records = [np.asarray(record) for record in records]
         if not records:
             return cls(np.empty(0), np.zeros(1, dtype="u8"))
@@ -115,6 +130,13 @@ class RaggedArray:
 
 @dataclass
 class Batch:
+    """One array of timestamps and matching dense or RaggedArray values.
+
+    Dense values have shape (N, *record_shape). DB write methods validate and
+    normalize timestamps and records; construction itself does not copy or sort
+    arrays. Streamed batches retain their stored schema and may use mapped memory.
+    """
+
     timestamps: np.ndarray
     values: np.ndarray | RaggedArray
 
@@ -123,6 +145,7 @@ class Batch:
 
     @property
     def schema(self):
+        """Return layout, explicit stored dtype, and per-record trailing shape."""
         ragged = isinstance(self.values, RaggedArray)
         values = self.values.values if ragged else self.values
         return {
@@ -133,6 +156,7 @@ class Batch:
 
     @property
     def nbytes(self):
+        """Return array payload bytes, including timestamps and ragged offsets."""
         if isinstance(self.values, RaggedArray):
             return (
                 self.timestamps.nbytes
@@ -142,6 +166,7 @@ class Batch:
         return self.timestamps.nbytes + self.values.nbytes
 
     def take(self, indices):
+        """Select matching timestamps and records with a slice or integer indices."""
         values = (
             self.values.take(indices)
             if isinstance(self.values, RaggedArray)
@@ -152,6 +177,13 @@ class Batch:
 
 @dataclass(frozen=True)
 class WriteResult:
+    """Acknowledged signal commit identity and upsert record counts.
+
+    ``inserted`` counts new timestamps, ``replaced`` counts overwritten incoming
+    timestamps, and ``total`` is the signal's record count after this commit.
+    Configuration/checkpoint commits have zero inserted and replaced counts.
+    """
+
     generation: int
     inserted: int
     replaced: int
@@ -161,6 +193,15 @@ class WriteResult:
 
 @dataclass
 class IngestResult:
+    """Acknowledged ingestion progress, including a normalized input cursor.
+
+    Counts accumulate over data commits; ``total`` is the most recent signal
+    count. ``generation`` and ``commit_id`` include the final checkpoint, while
+    ``commits`` counts only data groups. ``batch_index`` and ``record_offset`` are
+    zero-based positions after sorting/deduplication; offset is the number already
+    consumed within that batch. Empty ingestion leaves the defaults unchanged.
+    """
+
     commits: int = 0
     inserted: int = 0
     replaced: int = 0
@@ -172,7 +213,36 @@ class IngestResult:
 
 
 @dataclass(frozen=True)
+class StoreInfo:
+    """Store size in bytes and counts of live signals and timestamped records.
+
+    ``size_bytes`` includes metadata, recovery files, retired pages, and temporary
+    files. ``size_basis="allocated"`` uses filesystem block allocation, including
+    directories, with hard links counted once and symlinks not followed. When
+    allocation is unavailable (including XRootD/weak mounts), ``"logical"`` uses
+    file lengths; server replication and filesystem overhead are then unknown.
+
+    A vector or ragged record counts once per timestamp, regardless of its
+    number of array elements. Deleted signals and uncommitted records do not
+    contribute to the counts. Totals are not a transaction across signals.
+    """
+
+    size_bytes: int
+    signal_count: int
+    record_count: int
+    size_basis: str
+
+
+@dataclass(frozen=True)
 class SignalInfo:
+    """Committed signal metadata and statistics for its active measurement pages.
+
+    ``first``/``last`` use the signal's timestamp kind. ``payload_bytes`` counts
+    arrays and offsets; ``stored_bytes`` counts complete active data-page files,
+    excluding metadata, retired pages, and filesystem allocation overhead.
+    ``schemas`` contains per-layout/dtype/shape aggregates and value statistics.
+    """
+
     name: str
     time_kind: str
     generation: int
@@ -188,25 +258,38 @@ class SignalInfo:
 
 @dataclass
 class CheckReport:
+    """Integrity scan results: successfully checked page count and error messages."""
+
     pages: int = 0
     errors: list[str] = field(default_factory=list)
 
     @property
     def ok(self):
+        """Whether the requested scan found no errors; not a durability guarantee."""
         return not self.errors
 
 
 @dataclass
 class RecoveryReport:
+    """Committed-state reconstruction results for an offline destination.
+
+    ``recovered_signals`` lists restored live signals; ``deleted_signals`` lists
+    preserved empty deletion checkpoints. Errors make reconstruction incomplete.
+    Unconfirmed page IDs had no surviving commit record; ignored pages could not
+    be used, while repaired_pages lists restored envelopes.
+    """
+
     destination: str
     recovered_signals: list[str] = field(default_factory=list)
     errors: list[str] = field(default_factory=list)
     repaired_pages: list[str] = field(default_factory=list)
     unconfirmed_pages: list[str] = field(default_factory=list)
     ignored_pages: int = 0
+    deleted_signals: list[str] = field(default_factory=list)
 
     @property
     def complete(self):
+        """Whether all discovered committed states were reconstructed without errors."""
         return not self.errors
 
 

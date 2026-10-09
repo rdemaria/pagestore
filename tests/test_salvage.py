@@ -34,7 +34,7 @@ def flatten_data(db, destination, names):
 
 def test_data_pages_alone_reused_with_new_commits_and_recovery(tmp_path):
     source, flat, dest = (tmp_path / name for name in ("source", "flat", "new"))
-    with DB(source, default_max_page_size=3500) as db:
+    with DB(source, default_max_page_size=3500, mode="a") as db:
         db.store(
             {
                 "numeric/µ": (np.arange(100), np.arange(100, dtype=">f8")),
@@ -85,7 +85,7 @@ def test_data_pages_alone_reused_with_new_commits_and_recovery(tmp_path):
     "damage", ["prefix", "primary", "backup", "digest", "padding", "truncated_tail"]
 )
 def test_salvage_header_damage_without_any_recovery_record(tmp_path, damage):
-    with DB(tmp_path / "source") as db:
+    with DB(tmp_path / "source", mode="a") as db:
         db.store({"x": ([1, 2], [10, 20])})
         paths = flatten_data(db, tmp_path / "flat", ["x"])
     path = paths[0]
@@ -117,7 +117,7 @@ def test_salvage_header_damage_without_any_recovery_record(tmp_path, damage):
     "damage", ["values", "timestamps", "both_headers", "truncated_values"]
 )
 def test_unverifiable_pages_rejected_other_signals_salvaged(tmp_path, damage):
-    with DB(tmp_path / "source") as db:
+    with DB(tmp_path / "source", mode="a") as db:
         db.store({"bad": ([1, 2], [10, 20]), "good": ([1], [30])})
         paths = flatten_data(db, tmp_path / "flat", ["bad", "good"])
     h = read_page(paths[0]).header
@@ -138,7 +138,7 @@ def test_unverifiable_pages_rejected_other_signals_salvaged(tmp_path, damage):
 
 
 def test_overlap_requires_explicit_selection(tmp_path):
-    with DB(tmp_path / "source") as db:
+    with DB(tmp_path / "source", mode="a") as db:
         db.store({"x": ([1, 2], [10, 20]), "other": ([1], [50])})
         old = data_files(db, "x")[0]
         db.store({"x": ([2], [99])})
@@ -155,7 +155,7 @@ def test_overlap_requires_explicit_selection(tmp_path):
 
 
 def test_damaged_middle_page_leaves_verified_data_and_reports_gap(tmp_path):
-    with DB(tmp_path / "source", default_max_page_size=1) as db:
+    with DB(tmp_path / "source", default_max_page_size=1, mode="a") as db:
         db.store({"x": ([1, 2, 3], [10, 20, 30])})
         paths = flatten_data(db, tmp_path / "flat", ["x"])
     header = read_page(paths[1]).header
@@ -173,7 +173,7 @@ def test_conflicting_page_identity_is_reported_even_without_time_overlap(tmp_pat
     from pagestore.model import Batch
     from pagestore.page_format import data_plan
 
-    with DB(tmp_path / "source") as db:
+    with DB(tmp_path / "source", mode="a") as db:
         db.store({"x": ([1], [10])})
         paths = flatten_data(db, tmp_path / "flat", ["x"])
     header = read_page(paths[0]).header
@@ -185,12 +185,12 @@ def test_conflicting_page_identity_is_reported_even_without_time_overlap(tmp_pat
 
 
 def test_hardlink_reuses_intact_files_without_copy(tmp_path):
-    with DB(tmp_path / "source") as db:
+    with DB(tmp_path / "source", mode="a") as db:
         db.store({"x": ([1, 2], [10, 20])})
         path = data_files(db, "x")[0]
     report = salvage(tmp_path / "source", tmp_path / "new", reuse="hardlink")
     assert report.ok and report.linked_pages == 1 and report.copied_pages == 0
-    with DB(tmp_path / "new") as db:
+    with DB(tmp_path / "new", mode="a") as db:
         linked = data_files(db, "x")[0]
         assert path.samefile(linked)
         db.store({"x": ([2], [99])})
@@ -202,7 +202,7 @@ def test_hardlink_reuses_intact_files_without_copy(tmp_path):
 def test_hardlink_failure_has_no_implicit_copy(tmp_path, monkeypatch):
     from pagestore.backends import FileBackend
 
-    with DB(tmp_path / "source") as db:
+    with DB(tmp_path / "source", mode="a") as db:
         db.store({"x": ([1], [2])})
 
     def reject(*args):
@@ -245,7 +245,7 @@ def test_multiple_database_ids_are_not_merged_and_sources_protected(tmp_path):
     flat = tmp_path / "flat"
     flat.mkdir()
     for i in range(2):
-        with DB(tmp_path / str(i)) as db:
+        with DB(tmp_path / str(i), mode="a") as db:
             db.store({"x": ([i], [i])})
             shutil.copyfile(data_files(db, "x")[0], flat / f"{i}.pg")
     report = salvage(flat, tmp_path / "new")

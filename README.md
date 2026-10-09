@@ -7,6 +7,14 @@ The design and remaining milestones are documented in
 The implemented directory layout, indexes, binary pages, and recovery records are
 explained in [doc/store_layout.md](doc/store_layout.md).
 
+Directory trees grow adaptively with 128 slots per level. The first 128 signals
+or per-signal objects need no extra directory level; later allocations add levels
+without moving existing files. A million signals need at most two extra levels.
+Stable signal locations are cached in the name catalog and repeated in per-signal
+identity records. During experimentation, only the current layout (store format 3)
+is supported. Earlier layouts are rejected without conversion; binary pages remain
+version 1. The original SQLite-based implementation stays under `pagestore.legacy`.
+
 ## Installation and development
 
 Requires Python 3.10 or newer. Install from PyPI with:
@@ -20,6 +28,9 @@ NumPy is installed automatically. From a checkout, install with:
 ```sh
 python -m pip install .
 ```
+
+For native XRootD access, install the optional client bindings with
+`python -m pip install 'pagestore[xrootd]'` (or `'.[xrootd]'` from a checkout).
 
 For an editable development installation and the test suite:
 
@@ -42,15 +53,28 @@ Packaging is configured in `pyproject.toml`; the version comes from
 
 ## Store and read
 
+`DB(path_or_url)` opens an existing store read-only by default. A missing store
+raises `FileNotFoundError`; reads never initialize or repair storage. To create or
+modify a store, pass `mode="a"` explicitly (or `mode="x"` for exclusive creation).
+
 ```python
 from pagestore import DB
 
-with DB("./measurements") as db:
+with DB("./measurements", mode="a") as db:
     db.store({"temperature": ([1, 2, 3], [10.0, 11.0, 12.0])})
     db.store({"temperature": ([3, 4], [12.5, 13.0])})
     timestamps, values = db.get_signal("temperature", 2, 4)
     # timestamps: [2, 3, 4]; values: [11.0, 12.5, 13.0]
-    print(db.info("temperature"))
+    print(db.info_signal("temperature"))
+    totals = db.info()
+    print(totals.size_bytes, totals.signal_count, totals.record_count)
+```
+
+Read an existing store without requesting write access:
+
+```python
+with DB("./measurements") as db:
+    timestamps, values = db.get_signal("temperature")
 ```
 
 Bounds are inclusive. Writes sort timestamps, keep the last incoming duplicate,
@@ -61,20 +85,77 @@ exact names. Unknown exact names raise `SignalNotFoundError`.
 
 Search loads a compact, checksummed name catalog on first use and keeps names in
 memory. Every search checks for other workers' newly created signals; measurement
-updates need no shared catalog lock. DB opening and exact-name reads stay lazy.
-Only first-time signal creation pays the catalog maintenance cost.
+updates need no shared catalog lock. DB opening stays lazy; an initial exact-name
+lookup loads just one catalog shard and its signal identity, then caches the location.
+Signal creation, recreation, and full deletion pay the catalog maintenance cost;
+updates and partial deletions of existing signals use only their signal lock.
 
-For a store created with the original 0.0.0 implementation, build the catalog once:
+Call `db.refresh()` to drop PageStore's cached metadata before reading again:
 
 ```python
-with DB("./measurements") as db:
+db.refresh()
+timestamps, values = db.get_signal("temperature")
+```
+
+The next operation reloads the needed metadata, including name and location
+catalogs. `refresh()` returns `None`, performs no I/O, and works in read-only mode.
+Normal reads already check signal HEADs, and searches already check catalog changes.
+Existing iterators retain their original snapshots. Refresh cannot flush an
+EOS/SSHFS mount cache or wait for another writer's commit; use the authoritative
+XRootD URL for direct remote access.
+
+`info_signal(name)` returns one signal's active-page metadata and statistics.
+`info()` returns `StoreInfo(size_bytes, signal_count, record_count, size_basis)`.
+Size includes the entire store: metadata, recovery copies, old pages, locks, and
+temporary files. On filesystems exposing disk allocation, `size_basis="allocated"`
+counts allocated blocks including directories, counts hard links once, and does
+not follow symlinks. XRootD and weak mounts report `size_basis="logical"` using
+file lengths, since server allocation and replica overhead are unavailable.
+Counts cover live signals and records, with each timestamp counting once even
+when its value is an array. `info()` scans directory metadata and signal manifests
+without reading measurements; it can be slow for a large store. Concurrent writers
+can change totals during the scan. It does not modify storage.
+
+`repr(db)` shows its location, mode, backend profile, and closed state without
+storage access. The former `info(name)` API is now `info_signal(name)`.
+
+## Delete records
+
+```python
+with DB("./measurements", mode="a") as db:
+    removed = db.delete_signal("temperature", t1=2, t2=4)  # inclusive
+    removed = db.delete_signal("temperature")            # all remaining records
+```
+
+`delete_signal` uses an exact name and returns the number of records removed.
+Either time bound can be omitted; string datetime bounds accept the same
+`timezone=` option as reads. Missing signals and empty selections return `0`.
+Deleting the last record removes the name from search; subsequent exact reads
+raise `SignalNotFoundError`. A later `store` or `ingest` can recreate the name,
+including with a new timestamp kind.
+
+Deletion commits atomically per signal. Fully covered pages require no payload
+read; boundary pages are verified and rewritten. A full deletion records an empty
+recovery checkpoint, so committed-state recovery preserves it. Existing readers
+keep their captured snapshots. Physical files remain until future garbage
+collection, so this method does **not immediately free disk space**. Data-only
+salvage cannot know a page was deleted and may recover its former records.
+
+All public DB methods and exported result/container types have API docstrings,
+available through Python `help(DB)` and `help(DB.delete_signal)`.
+
+## Catalog maintenance
+
+Rebuild a missing or damaged derived name catalog from signal metadata:
+
+```python
+with DB("./measurements", mode="a") as db:
     print(db.rebuild_catalog())  # signal count; reads HEADs/manifests, not data pages
 ```
 
 The first writable search also builds a missing catalog automatically. Read-only
-clients use the older scan until it exists. Use catalog-aware writers thereafter;
-after adding signals with older code, rebuild before relying on search. The same
-method repairs a corrupt name catalog. Exact-name data reads remain independent.
+clients scan signal HEADs until it exists. Exact-name data reads remain independent
+of this cache. Rebuilding a catalog does not convert unsupported store layouts.
 
 Numeric timestamps remain numeric measurement axes. Integer timestamps are int64;
 floating timestamps are float64. A signal's timestamp kind is fixed by its first
@@ -83,7 +164,7 @@ nonempty write, and subsequent conversions must be exact.
 ## Datetimes and timezones
 
 ```python
-with DB("./measurements", timezone="utc") as db:
+with DB("./measurements", mode="a", timezone="utc") as db:
     db.store({"beam": (["2026-01-01 12:00:00.123456789"], [42.0])},
              timezone="cern")
     timestamps, values = db.get_signal(
@@ -105,19 +186,31 @@ nanoseconds, convert explicitly without copying:
 timestamps = timestamps_ns.view("datetime64[ns]")
 ```
 
-## Parallel bulk loads
+## Concurrent writers
 
-Assign different signals to different workers; each worker opens its own `DB`.
-`ingest` consumes an iterator of `Batch` objects or `(timestamps, values)` tuples.
-It buffers approximately one commit group, rather than the entire extraction.
+Each worker opens its own `DB` and uses ordinary methods. For example, a worker
+loading extracted batches calls `store()` as usual:
 
 ```python
-from pagestore import Batch, DB
+from pagestore import DB
 
-def load_signal(path, name, extracted_batches):
-    with DB(path) as db:
-        return db.ingest(name, extracted_batches)
+with DB(path, mode="a") as db:
+    for timestamps, values in extracted_batches:
+        db.store({name: (timestamps, values)})
 ```
+
+The store handles initialization and writer coordination automatically. Different
+signals progress independently; writes to the same signal serialize, preserving
+records outside each update. For equal timestamps, the last committed upsert wins.
+No parallel mode, worker registration, or caller-managed lock is required. Assigning
+different signals to workers improves throughput but is not required for correctness.
+Keep a separate DB instance per process or thread.
+
+## Streaming writes
+
+`ingest` optionally consumes an iterator of `Batch` objects or `(timestamps, values)`
+tuples with bounded buffering and grouped commits. It uses the same coordination
+as `store()` and is useful for large streams regardless of the number of workers.
 
 Each signal defaults to **8 MiB per serialized page**, including metadata and
 hashes. Set `max_page_size=64 * 1024**2` on `store` or `ingest` for larger records
@@ -250,9 +343,73 @@ dead and reconcile the committed state before removing its lock directory.
 
 This first implementation is tested on a local filesystem, including multiple
 processes and the directory-lock protocol. NFS still needs qualification on the
-deployment servers. Writable EOS, native `root://`, and `s3://` adapters are not
-implemented and fail explicitly. Instances are thread-confined. Use `mode="r"`
-for read-only access or `mode="x"` to require a new database.
+deployment servers. `s3://` is not implemented. Instances are thread-confined.
+Read-only access (`mode="r"`) is the default. Use `mode="a"` to open or create a
+writable store, or `mode="x"` to require a new database.
+
+### XRootD and EOS
+
+```python
+url = "root://eosproject-a.cern.ch//eos/project/a/abpdata/cerndatadb"
+with DB(url, mode="a") as db:
+    db.store({"temperature": ([1, 2], [10., 11.])})
+```
+
+`root://` and `roots://` use the XRootD Python client directly, with its configured
+authentication (including Kerberos). No subprocess or local staging file is used
+per page. `/eos/` namespaces select the EOS profile automatically; an explicit
+`?profile=eos` selects EOS for another namespace. An EOS namespace cannot be
+overridden to the generic XRootD profile. EOS uploads use
+[`eos.atomic=1`](https://eos-docs.web.cern.ch/clicommands/cp.html) on unique staging
+names. Publication waits for server sync/close, size and checksum confirmation,
+then a server-side rename. Mutable metadata is read back by content before success.
+EOS uses exclusive namespace `mkdir` locks (`eos-mkdir`); generic XRootD uses
+exclusive owner-file creation (`xrootd-exclusive`). This distinction matters: EOS
+can accept concurrent `NEW` opens before a file closes, while some generic servers
+treat `mkdir` as idempotent. The selected protocol is persisted; incompatible
+writable clients are rejected. Both profiles require atomic overwrite by rename;
+there is no delete-then-rename fallback.
+
+An SSHFS/EOS mount may acknowledge close before EOS commits the file, and may
+serve cached reads afterward. Supply the authoritative URL when opening a mounted
+path for writing:
+
+```python
+with DB("/eos/project-a/abpdata/cerndatadb", mode="a", xrootd_url=url) as db:
+    print(db.backend_info)
+```
+
+This routes **all reads, writes, and locks through XRootD**. The path is an alias;
+the supplied URL identifies the store and must point at the intended directory.
+For this CERN instance, `/eos/project-a/` on the mount maps to `/eos/project/a/`
+in XRootD. Generic SSHFS mounts cannot supply this mapping automatically.
+Writable access through an unconfigured EOS/SSHFS mount is rejected, including
+attempts to override its profile to `generic` or `local`. Read-only mounted access
+is allowed; pages are copied into verified byte snapshots instead of memory-mapped.
+Such readers can see older committed snapshots because of mount caching.
+
+`io_timeout=30` limits each XRootD request in seconds; `visibility_timeout=30`
+controls bounded retries for incomplete or not-yet-visible referenced files.
+Remote pages always undergo full hash verification. `lock_timeout=30` controls
+writer contention. A timeout or ambiguous response to a mutation retains held
+locks and disables further writes on that instance. An old HEAD does not prove
+rollback: outstanding operations must be reconciled before locks are removed.
+
+Synthetic integration tests on EOS cover parallel writers, upserts, catalog
+rebuilds, checksummed reads, process contention, and mounted aliases. Distributed
+outages and server durability still require deployment testing; a successful
+single-host test is not a multi-host fault qualification. See the
+[validation record](doc/xrootd_validation.md) for tested servers and retained fixtures. `recover` and `salvage`
+remain offline tools taking filesystem directories, not native remote URLs.
+Run the opt-in tests only against a disposable parent (new test stores are retained):
+
+```sh
+PAGESTORE_TEST_XROOTD_URL=root://host//path/to/tests \
+    python -m pytest -q -s tests/test_xrootd_integration.py
+```
+
+Set `PAGESTORE_TEST_MOUNT_PARENT` to the matching mounted directory to also test
+the alias and read-only mount paths.
 
 Run `python -m pytest -q` for the test suite. Run
 `PYTHONPATH=. python examples/benchmark.py --workers 4 --records 1048576` for a synthetic
@@ -287,3 +444,13 @@ and [examples](https://github.com/rdemaria/pagestore/tree/main/examples/legacy/)
 are retained. Open only trusted legacy files;
 the new `DB` neither opens nor modifies that format. Copy legacy measurements
 explicitly into a separate new database when needed.
+
+For the bounded EOS migration pilot, `pagestore.legacy.migration` validates
+uncompressed numeric PyTimber pages and verifies imported records without changing
+source files. `examples/migrate_legacy_pilot.py` executes a frozen, reviewed manifest
+and keeps immutable audit attempts in a sibling migration directory. It rejects
+missing/corrupt sources, unordered or duplicate timestamps, and conflicting
+destination intervals. It is a pilot runner, not a general legacy converter;
+overlap resolution and source retirement remain separate steps.
+See the [bounded EOS pilot results](doc/migration_pilot.md) for measured ingestion,
+integrity, recovery, space usage, and the explicitly excluded legacy pages.

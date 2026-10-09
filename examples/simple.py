@@ -5,7 +5,7 @@ from tempfile import TemporaryDirectory
 from pagestore import DB
 
 with TemporaryDirectory() as directory:
-    with DB(directory) as db:
+    with DB(directory, mode="a") as db:
         db.store({"temperature": ([1, 2, 3], [10.0, 11.0, 12.0])})
         db.store({"temperature": ([3, 4], [12.5, 13.0])})
         print(db.get_signal("temperature", 2, 4))

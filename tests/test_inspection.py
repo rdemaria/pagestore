@@ -9,7 +9,7 @@ from pagestore.page_format import PREFIX, data_plan, read_page as decode_page
 
 def standalone_page(tmp_path, timestamps, values):
     source = tmp_path / "source"
-    with DB(source) as db:
+    with DB(source, mode="a") as db:
         db.store({"signal/µ": (timestamps, values)})
         manifest, _ = db._head("signal/µ")
         descriptor = next(db._index(manifest).pages())
@@ -91,7 +91,7 @@ def test_read_page_always_verifies_all_hashes(tmp_path, damage):
 
 
 def test_recovery_pages_are_not_returned_as_measurements(tmp_path):
-    with DB(tmp_path / "db") as db:
+    with DB(tmp_path / "db", mode="a") as db:
         path = db._backend.path(f"pages/recovery/store-{db._config['config_id']}.0.pg")
         with pytest.raises(ValueError, match="measurement page"):
             read_page(path)

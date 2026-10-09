@@ -9,7 +9,7 @@ from pagestore.timestamps import normalize_timestamps
 
 
 def test_utc_default_and_nanoseconds(tmp_path):
-    with DB(tmp_path / "db") as db:
+    with DB(tmp_path / "db", mode="a") as db:
         db.store(
             {
                 "x": (
@@ -46,7 +46,7 @@ def test_cern_and_local(tmp_path, monkeypatch, date, expected):
         result, kind = normalize_timestamps([date], timezone=zone)
         assert kind == "datetime64[ns]"
         assert result[0] == np.datetime64(expected, "ns")
-    with DB(tmp_path / "db", timezone="cern") as db:
+    with DB(tmp_path / "db", timezone="cern", mode="a") as db:
         db.store({"x": ([date], [1])})
         assert db.count_signal("x", date, date) == 1
         assert db.count_signal("x", expected, expected, timezone="utc") == 1
@@ -107,4 +107,4 @@ def test_exact_numeric_and_datetime_conversions():
 
 def test_invalid_timezone_even_for_empty_input(tmp_path):
     with pytest.raises(ValueError, match="timezone"):
-        DB(tmp_path / "db", timezone="not/a/timezone")
+        DB(tmp_path / "db", timezone="not/a/timezone", mode="a")

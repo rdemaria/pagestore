@@ -6,6 +6,7 @@ import errno
 import os
 from pathlib import Path
 import re
+import stat
 import threading
 import time
 from urllib.parse import parse_qs, unquote, urlsplit
@@ -14,6 +15,7 @@ from weakref import WeakValueDictionary
 
 from ..errors import (
     CommitOutcomeUnknownError,
+    CorruptionError,
     LockTimeoutError,
     UnsupportedBackendError,
 )
@@ -60,14 +62,22 @@ def _mount_type(path):
         ):
             fields = right.split()
             fs = fields[0]
-            if fs.startswith("fuse") and "eos" in " ".join(fields).lower():
+            if (
+                fs.startswith("fuse")
+                and "sshfs" not in fs
+                and "eos" in " ".join(fields).lower()
+            ):
                 fs = "fuse.eos"
             matches.append((len(mount), fs))
     return max(matches)[1] if matches else "unknown"
 
 
 class FileBackend:
-    def __init__(self, url, *, writable=True, lock_timeout=30.0):
+    init_coordination = "mkdir"
+
+    def __init__(
+        self, url, *, writable=True, lock_timeout=30.0, visibility_timeout=30.0
+    ):
         raw = os.fspath(url)
         profile = None
         if isinstance(url, str) and "://" in raw:
@@ -90,14 +100,26 @@ class FileBackend:
         detected = (
             "local"
             if fs in _LOCAL
-            else "nfs" if fs.startswith("nfs") else "eos" if "eos" in fs else "generic"
+            else (
+                "nfs"
+                if fs.startswith("nfs")
+                else "sshfs" if "sshfs" in fs else "eos" if "eos" in fs else "generic"
+            )
         )
         profile = profile or detected
-        if profile not in {"local", "nfs", "eos", "generic"}:
+        self._weak_visibility = detected in {"eos", "sshfs"} or profile in {
+            "eos",
+            "sshfs",
+        }
+        self.visibility_timeout = float(visibility_timeout)
+        if not 0 <= self.visibility_timeout < float("inf"):
+            raise ValueError("visibility_timeout must be finite and nonnegative")
+        if profile not in {"local", "nfs", "eos", "sshfs", "generic"}:
             raise UnsupportedBackendError(f"Unknown filesystem profile: {profile}")
-        if writable and profile == "eos":
+        if writable and (detected in {"eos", "sshfs"} or profile in {"eos", "sshfs"}):
             raise UnsupportedBackendError(
-                "Writable EOS needs a qualified namespace adapter; this release supports local/NFS filesystem operations"
+                "EOS/SSHFS mount close is not a remote commit; supply xrootd_url="
+                " with the authoritative URL of this store, or open that root:// URL directly"
             )
         if writable and profile == "local" and detected in {"nfs", "eos"}:
             raise UnsupportedBackendError(
@@ -113,8 +135,12 @@ class FileBackend:
         self.metrics = {"read_bytes": 0, "written_bytes": 0, "publications": 0}
 
     def bind_coordination(self, family):
-        if family not in {"mkdir", "flock"}:
+        if family not in {"mkdir", "flock", "xrootd-exclusive", "eos-mkdir"}:
             raise UnsupportedBackendError(f"Unknown coordination family: {family}")
+        if self.writable and family in {"xrootd-exclusive", "eos-mkdir"}:
+            raise UnsupportedBackendError(
+                "This store requires XRootD coordination; supply xrootd_url"
+            )
         if self.writable and family == "flock" and self.info.coordination != "flock":
             raise UnsupportedBackendError(
                 "This database requires local flock; its current filesystem needs directory locks"
@@ -156,13 +182,106 @@ class FileBackend:
                 pass
             self._sync_dir(directory.parent)
 
-    def read(self, key):
-        data = self.path(key).read_bytes()
-        self.metrics["read_bytes"] += len(data)
-        return data
+    def read(self, key, *, expected=None):
+        def attempt():
+            data = self.path(key).read_bytes()
+            self.metrics["read_bytes"] += len(data)
+            if self._weak_visibility:
+                from ..catalog import digest, unpack
+
+                if expected is not None and digest(data) != expected:
+                    raise CorruptionError(f"Mounted file checksum mismatch: {key}")
+                if key.endswith(".json"):
+                    unpack(data)
+            return data
+
+        return self._visible_read(attempt, missing=expected is not None)
+
+    def _visible_read(self, operation, *, missing=False):
+        if not self._weak_visibility:
+            return operation()
+        deadline = time.monotonic() + self.visibility_timeout
+        delay = 0.01
+        while True:
+            try:
+                return operation()
+            except FileNotFoundError:
+                if not missing or time.monotonic() >= deadline:
+                    raise
+            except CorruptionError:
+                if time.monotonic() >= deadline:
+                    raise
+            time.sleep(min(delay, max(0, deadline - time.monotonic())))
+            delay = min(0.5, delay * 2)
+
+    def read_page(self, key, *, full=False, expected=None):
+        from ..page_format import decode, read_page
+
+        if self._weak_visibility:
+            # A mount may fill or replace cache files after close. Decode an owned
+            # snapshot, never expose a live mmap of that cache to the caller.
+            return self._visible_read(
+                lambda: decode(
+                    self.path(key).read_bytes(), full=True, expected=expected
+                ),
+                missing=expected is not None,
+            )
+        return read_page(self.path(key), full=full, expected=expected)
+
+    def listdir(self, key=""):
+        return [p.name for p in self.path(key).iterdir()]
+
+    def glob(self, pattern):
+        return (p.relative_to(self.root).as_posix() for p in self.root.glob(pattern))
 
     def exists(self, key):
         return self.path(key).exists()
+
+    def disk_usage(self):
+        """Return total allocated bytes and basis, falling back to file lengths.
+
+        Count directories and every file, including hidden/temporary files. Do
+        not follow symlinks; count filesystem hard links once. A disappearing
+        child is skipped, but missing roots and permission errors propagate.
+        """
+        allocated = logical = 0
+        have_blocks = not self._weak_visibility
+        hardlinks = set()
+
+        def account(info):
+            nonlocal allocated, logical, have_blocks
+            is_dir = stat.S_ISDIR(info.st_mode)
+            if not is_dir and info.st_nlink > 1:
+                identity = info.st_dev, info.st_ino
+                if identity in hardlinks:
+                    return
+                hardlinks.add(identity)
+            blocks = getattr(info, "st_blocks", None)
+            if blocks is None or blocks < 0:
+                have_blocks = False
+            else:
+                allocated += blocks * 512
+            if not is_dir:
+                logical += info.st_size
+
+        account(self.root.stat())
+        stack = [self.root]
+        while stack:
+            directory = stack.pop()
+            try:
+                with os.scandir(directory) as entries:
+                    for entry in entries:
+                        try:
+                            info = entry.stat(follow_symlinks=False)
+                        except FileNotFoundError:
+                            continue
+                        account(info)
+                        if stat.S_ISDIR(info.st_mode):
+                            stack.append(entry.path)
+            except FileNotFoundError:
+                if directory == self.root:
+                    raise
+        return (allocated, "allocated") if have_blocks else (logical, "logical")
 
     def publish(self, key, chunks, *, replace=False):
         """Write final bytes once, sync, then expose the complete file by rename."""

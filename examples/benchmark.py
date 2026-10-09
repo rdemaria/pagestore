@@ -47,7 +47,7 @@ def worker(task):
         publications = backend.metrics["publications"]
         written = backend.metrics["written_bytes"]
     else:
-        with DB(directory) as db:
+        with DB(directory, mode="a") as db:
 
             def batches():
                 for offset in range(0, records, 262144):
@@ -97,7 +97,7 @@ def main():
         for direct in (True, False):
             directory = str(Path(temporary) / ("direct" if direct else "pagestore"))
             if not direct:
-                with DB(directory) as db:
+                with DB(directory, mode="a") as db:
                     backend = db.backend_info.__dict__
             context = multiprocessing.get_context("spawn")
             with context.Pool(

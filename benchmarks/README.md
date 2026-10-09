@@ -2,6 +2,11 @@
 
 ## Large signal catalogs
 
+The retained million-signal results below predate store format 3 and its adaptive
+layout/location catalog. They are historical measurements, not current-format
+performance results. The retained store is unchanged and cannot be opened by the
+current implementation; use a fresh store for current-format benchmarks.
+
 `examples/benchmark_many_signals.py` exercises the public `DB.ingest` API using
 one million distinct signals, each with 32 int64 timestamps and float64 scalar
 values: 32 million records and 512 MB of logical payload (decimal units). Each
@@ -18,7 +23,8 @@ PYTHONPATH=. python examples/benchmark_many_signals.py --directory /tmp \
 At 1,000, 10,000, 100,000, and 1,000,000 signals, writers pause while a fresh
 reader process measures:
 
-- Opening and closing `DB` in read-only and default writable mode, 100 times each.
+- Opening and closing `DB` in read-only and writable (`mode="a"`) modes, 100 times
+  each. Read-only is now the default; these measurements selected modes explicitly.
 - Exact-name reads, first over 100 random signals and then over the same signals
   again. Every timestamp, value, and dtype is verified outside the timed call.
 - `db.get(names)` for 12 random signal names, 100 times, verifying all 384 records

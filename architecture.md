@@ -50,6 +50,10 @@ The following decisions guide the implementation:
   New signal creation is rare and may pay for a shared discovery-catalog update.
   Serialize publication to each signal independently. Readers must see a complete
   committed version while another client writes the same signal.
+- Handle concurrency through ordinary DB methods and automatic backend
+  coordination. No separate parallel API, caller-held lock, worker registration,
+  or parallel-mode flag is required. Streaming controls input buffering, not
+  whether concurrent callers are supported.
 - Publish immutable pages and manifests through one small, atomically updated
   pointer per signal. A write involving several signals commits each independently.
 
@@ -192,12 +196,14 @@ with DB("/data/pagestore", mode="a") as db:
 Target signatures (type names are descriptive):
 
 ```text
-DB(url, *, mode="a", default_max_page_size=None, lock_timeout=30.0, timezone="utc")
+DB(url, *, mode="r", default_max_page_size=None, lock_timeout=30.0, timezone="utc")
 db.close()
+db.refresh() -> None
 db.backend_info -> BackendInfo
 db.search(regexp="") -> list[str]
 db.rebuild_catalog() -> int  # metadata-only rebuild; number of visible signals
-db.info(name) -> SignalInfo
+db.info() -> StoreInfo
+db.info_signal(name) -> SignalInfo
 db.configure_signal(name, *, max_page_size) -> SignalInfo
 
 db.get_signal(name, t1=None, t2=None, *, max_count=None, skip=0, timezone=None)
@@ -212,12 +218,23 @@ db.count(selector=None, t1=None, t2=None, *, max_count=None, skip=0, timezone=No
 db.iter_signal(name, t1=None, t2=None, *, max_count=None, skip=0, timezone=None)
     -> context-managed iterator[Batch]
 db.store(data, *, max_page_size=None, timezone=None) -> dict[str, WriteResult]
+db.delete_signal(name, t1=None, t2=None, *, timezone=None) -> int
 db.ingest(name, batches, *, max_page_size=None, on_overlap="error",
           commit_bytes=64 * 1024**2, timezone=None) -> IngestResult
 ```
 
-`mode="r"` opens an existing database without modifying storage, `"a"` opens or
-creates one, and `"x"` creates a new database and fails if it already exists.
+`mode="r"` is the default: it opens an existing database without modifying storage
+and fails if the database is missing. Writing requires explicit `mode="a"` to open
+or create a database, or `mode="x"` to create one and fail if it already exists.
+`refresh()` clears the instance's cached names/shards, signal locations and
+verified identities, and recovery verification results. It performs no I/O or
+writes; subsequent operations reload only the metadata they need. Read-only mode
+is supported, and a closed instance raises `ValueError`. Existing iterators and
+arrays retain their captured snapshots. Keep the backend instance, writer locks,
+and ambiguous-mutation protection unchanged. This is cache invalidation, not a
+global snapshot or an external filesystem-cache flush. Ordinary reads already
+reread signal HEADs and searches already check the name-catalog HEAD.
+
 The database creation default is `default_max_page_size=8 * 1024**2` bytes.
 `None` selects that value for a new database or the stored default for an existing
 one; an explicitly conflicting database default is an error. Each new signal
@@ -237,7 +254,27 @@ For example, `db.store({"large": batch}, max_page_size=64 * 1024**2)` creates or
 updates that signal with a 64 MiB limit, while other signals keep their settings.
 `db.configure_signal("large", max_page_size=256 * 1024**2)` can raise it later.
 Instances are thread-confined; use independent instances in different threads
-or processes.
+or processes. Every instance uses the same ordinary API. `store()` handles
+simultaneous creation, independent-signal writes, and same-signal upserts through
+backend coordination; callers do not opt into a separate concurrency mode.
+
+`delete_signal` takes an exact name and removes the inclusive timestamp interval,
+with None bounds meaning unbounded. Return the removed record count; missing
+signals and empty selections return zero without a commit. Reversed bounds on an
+existing signal raise ValueError. Datetime parsing follows the read API. Retire
+fully covered pages from index metadata; verify and rewrite only partial boundary
+pages, retaining all other immutable pages and index branches.
+
+When no records remain, commit `root: null` with an empty recovery checkpoint and
+zero aggregate totals. Keep this tombstone's HEAD, signal identity, generation,
+allocation counters, and paired recovery files. Remove the name from discovery;
+exact reads then raise SignalNotFoundError. Recreation continues the history and
+counters but may use a new timestamp kind and default page-size setting. Checks
+must inspect tombstones, and strict recovery must preserve them, reporting their
+names in `RecoveryReport.deleted_signals`. Data-only salvage cannot infer deletion.
+No deletion operation unlinks old measurement files: disk reclamation remains
+separate maintenance. All participating clients must use the current format and
+understand its empty-checkpoint deletion semantics.
 
 `ingest` consumes an iterator of homogeneous batches for one signal with bounded
 buffering. A worker normally calls it once for its assigned signal/time window.
@@ -334,7 +371,26 @@ have been durably written. If HEAD commits but this redundancy step fails, repor
 `RecoveryIncompleteError` with `committed=True`, signal and commit ID. Repair the
 recovery copies idempotently; do not replay the upsert or report that it rolled back.
 
-`SignalInfo` contains the name, time kind, generation, `max_page_size`, record count,
+`info()` returns `StoreInfo(size_bytes, signal_count, record_count, size_basis)`.
+Size covers the complete namespace: current and retired pages, recovery copies,
+catalogs, locks, pending files, and other stored files. Filesystem block allocation
+is used when available (`size_basis="allocated"`), including directories and
+counting hard links once without following symlinks. XRootD/weak mounts expose
+logical file lengths (`size_basis="logical"`); remote physical allocation and
+replica overhead cannot be inferred from those lengths. XRootD requests stat
+information with each directory listing to avoid a separate request per file.
+Signal and record counts include live committed data only, using current manifest
+root summaries rather than reading indexes or measurement payloads. Array/ragged
+values still contribute one record per timestamp.
+
+This is a non-mutating metadata scan proportional to files and signals. Enumerate
+authoritative identities and HEADs independently of the derived name catalog,
+even if that cache is missing or damaged; do not publish repairs. No global
+writer lock or snapshot is taken, so concurrent updates can change the totals
+during enumeration. DB representations must remain cheap: show location, mode,
+profile, and open/closed state without calling `info()` or accessing storage.
+
+`info_signal(name)` returns `SignalInfo` with name, time kind, generation, `max_page_size`, record count,
 first/last timestamp, page count, payload bytes, stored bytes, and schema summaries.
 Report value ranges **per schema**, not by coercing incompatible schemas into one range.
 For bool/integer/real values, store scalar min/max over all record elements plus
@@ -342,8 +398,8 @@ NaN count; ignore NaNs for extrema and return `None` when no ordered value exist
 Infinities participate in extrema. Complex/string ranges are `None`. This keeps
 metadata bounded even for large tensor records. Schema summaries also carry
 record counts; they do not imply one continuous interval of that schema.
-Page counts and data byte totals refer to active measurement pages; recovery-copy
-storage is reported separately.
+Per-signal page counts and byte totals refer to active measurement pages. The
+store-wide size includes recovery records, metadata, and retained history.
 
 ## File catalog and directory layout
 
@@ -354,45 +410,75 @@ Creating a new signal also maintains a compact, derived name catalog.
 
 ```text
 store.json                         # format, database UUID, page/coordination settings
-catalog/HEAD.json                  # checksummed shard references + creation intents
-catalog/LOCK.lock                  # local profile; LOCK.LOCK for mkdir coordination
-catalog/shards/ab/<uuid>.json       # sorted names, sharded by signal hash
+catalog/HEAD.json                  # shard references, next signal ordinal, name intents
+catalog/LOCK.lock                  # local profile; LOCK.LOCK for directory coordination
+catalog/shards/<uuid>.json         # up to 128 current location/name shards
 pages/recovery/store-<config-uuid>.0.pg
 pages/recovery/store-<config-uuid>.1.pg  # also preserve an empty store's configuration
 signals/
-  ab/<sha256-of-exact-name>/
-    HEAD.json                      # name, kind, generation, manifest key + digest
-    LOCK/                          # only for profiles using directory locks
-    manifests/<commit-uuid>.json
-    index/<node-uuid>.json         # immutable bounded page-descriptor index nodes
+  00-<sha256-of-exact-name>/         # signal ordinal 0
+    SIGNAL.json                    # immutable name/hash/database UUID/ordinal
+    HEAD.json                      # current commit ID and manifest reference
+    LOCK.lock                      # backend-specific per-signal coordination
+    manifests/<uuid>.json          # generations 1–128
+    manifests/01/<uuid>.json        # generations 129–256
+    index/<node-uuid>.json          # immutable page-descriptor index nodes
+    index/01/<node-uuid>.json        # index-node ordinals 128–255
     pages/00-<uuid>.pg
-    pages/01-<uuid>.pg
-    pages/01/00-<uuid>.pg            # ordinal 100
-    pages/01/01/00-<uuid>.pg         # ordinal 10100
+    pages/7f-<uuid>.pg
+    pages/01/00-<uuid>.pg            # page ordinal 128
+    pages/01/00/00-<uuid>.pg         # page ordinal 16,384
     pages/recovery/<commit-uuid>.0.pg
     pages/recovery/<commit-uuid>.1.pg  # identical independent recovery copy
-    tmp/<operation-uuid>/...        # preparation files use .pending, not .pg
+    pages/recovery/01/<commit-uuid>.0.pg # generations 129–256, both copies here
+  7f-<sha256-of-exact-name>/         # signal ordinal 127
+  01/00-<sha256-of-exact-name>/      # signal ordinal 128
+  01/00/00-<sha256-of-exact-name>/   # signal ordinal 16,384
 ```
 
-The first two hex digits shard signal directories. Always check that the stored
-name matches the requested name; a hash collision is an error. Do not expose user
-names as path components. Paths inside manifests are relative keys confined to
-the database root.
+Use radix **128** for adaptive allocation. Encode each base-128 digit as two
+hexadecimal characters (`00`–`7f`). The first 128 objects stay flat; ordinals
+128–16,383 use one directory level, 16,384–2,097,151 use two, and larger ordinals
+add levels as needed. This applies independently to signals and every per-signal
+object collection. Fill siblings before adding depth. Never move existing objects
+or wrap an old tree in another root when it grows. Do not scan directory entries
+to select the next location.
 
-Within each signal, format the page ordinal in base-100 directory components,
-using two decimal digits per component; append a UUID to the last component.
-Pages are initially flat and grow into deeper paths without moving old pages.
-The manifest stores the exact keys and next ordinal. Concurrent or aborted writes
-may reuse an ordinal, but their UUIDs make their complete page keys distinct.
-Never overwrite a page or manifest key.
+A signal path contains its allocated ordinal and exact UTF-8 name's SHA-256 hash.
+The hash verifies identity; allocation determines the directory depth. Names never
+become path components. Paths inside manifests are relative keys confined to the
+store root. Allocate each new signal under the catalog lock and persist its stable
+ordinal there, then publish an immutable `SIGNAL.json` repeating name, hash,
+database UUID, and ordinal. Release the catalog lock before returning the location
+and acquiring the signal lock. This identity anchors the location during catalog
+rebuilds, including a reservation without any committed measurements. Deleted and
+recreated signals keep their identities, ordinals, and lock paths.
 
-`HEAD.json` contains `format_version`, `database_id`, `signal_id`, `name`,
-`time_kind`, `generation`, `commit_id`, `manifest_key`, and `manifest_sha256`.
-The backend returns an opaque revision token alongside it. The token may be an
-object-store ETag; do not treat an ETag as a content checksum.
+Within each signal, append a UUID to a data page's final radix component. The
+manifest stores exact keys and the next page ordinal. Aborted writes may reuse
+an object ordinal, but UUIDs keep complete page keys distinct. Never overwrite a
+page or manifest key. Index nodes use a separate committed `next_index_ordinal`
+counter. Manifests and paired recovery records use generation minus one; their
+filenames use UUIDs within the ordinal's parent directory.
+
+Each directory normally holds up to 128 allocated objects (256 files for paired
+recovery records) plus up to 128 radix children. Signal leaves are directories,
+not files; the data-page root also has a `recovery/` directory. Pending or aborted
+writes can leave additional orphan files; reclamation is separate maintenance.
+A global counter is used only for rare signal allocation; ordinary measurement
+updates remain independent per signal. Small signals add no extra object levels.
+
+The current store format is version 3; binary page format stays at version 1.
+Maintain one layout and remove superseded layout code. Opening and committed-state
+recovery reject unsupported versions before mutation; do not convert stores
+implicitly. Recovery and salvage allocate new locations using the current layout
+while retaining verified supported measurement bytes unchanged.
+
+`HEAD.json` contains a commit ID and a checksummed manifest reference. Atomic
+replacement under backend coordination publishes a new committed snapshot.
 
 Each manifest repeats the signal identity, kind, generation and commit ID, records
-its parent commit ID and next ordinal, and includes signal settings, aggregate
+its stable signal ordinal, parent commit ID, and next page/index ordinals, and includes signal settings, aggregate
 counts/bytes, a page-index root key/hash and this commit's added/removed page IDs.
 Added pages carry full descriptors. It does not repeat every unchanged descriptor.
 Each descriptor includes:
@@ -400,7 +486,7 @@ Each descriptor includes:
 - Page ID/key, page-format version, embedded page SHA-256, payload bytes, and
   file bytes. Page IDs allow recovery to rebuild keys after files have been moved.
 - Count, first/last timestamp, and schema `(layout, dtype, record_shape)`.
-- Per-page value statistics used by `info`.
+- Per-page value statistics used by `info_signal`.
 
 Encode integer/datetime bounds as decimal strings in JSON so generic JSON readers
 cannot lose 64-bit precision. Encode float bounds using `float.hex()` and decode
@@ -421,44 +507,61 @@ incremental recovery record or full checkpoint, plus root configuration.
 Reconstruction replays these committed records, not directory names, file
 modification times or upload order of otherwise unreferenced data pages.
 
-`search` lazily loads a compact, persistent name catalog into memory. Up to 256
-immutable JSON shards hold sorted names, partitioned by the first byte of the
-signal-name hash. A checksummed `catalog/HEAD.json` contains their keys and SHA-256
-digests, the database identity, and pending creation names. Each search rereads
-this small HEAD; unchanged shards remain cached. Changed shards are loaded and
-the merged name list sorted. Regex searches scan that list in memory. An empty
-regex returns a copy of the sorted names. Opening a DB and exact-name measurement
-reads do not load this catalog or enumerate the namespace.
+`search` lazily loads a compact, persistent catalog into memory. Up to 128
+immutable JSON shards contain parallel sorted `names`, allocation `ordinals`, and
+`live` arrays, partitioned by the first seven bits of the name's SHA-256. A
+checksummed `catalog/HEAD.json` contains their keys/digests, database identity,
+`next_signal_ordinal`, and pending creation/deletion names. The catalog's schema
+version is 2, distinct from store format 3. Shard files are flat and old versions
+are retired, so this bounded collection needs no adaptive directory tree.
 
-First creation takes the signal lock, then the catalog lock. Before publishing
-the signal HEAD, durably add a creation intent to the catalog HEAD. Publish the
-signal commit and its paired recovery pages, then add the name to its shard and
-remove the intent in one catalog HEAD replacement. Readers resolve remaining
-intents against signal HEADs: committed creations remain visible after a crash;
-uncommitted creations are excluded. Catalog finalization failures after a durable
-signal commit raise `CatalogIncompleteError(committed=True)`. Existing-signal
-writes never acquire the catalog lock or invalidate the name cache.
+Each search rereads the small HEAD and reloads only changed shards. Regex searches
+scan the sorted live-name list in memory; an empty pattern returns a copy. Opening
+a DB loads no names. An initial exact lookup reads only the relevant shard and
+identity anchor. Cached positive locations remain usable across catalog changes;
+keep a bounded hot cache in addition to the lazy shard cache. Do not cache missing
+names or unanchored reservations indefinitely. This prevents a reader from retaining
+a stale path after rebuild discards an allocation interrupted before its identity
+was published. A successful allocation always has a durable identity before a
+writer receives the path.
 
-After durable catalog publication, retire replaced name shards. A reader whose
-captured shard has been removed retries against the newer catalog HEAD. If HEAD
-is unchanged, a missing shard is corruption. Persistent failure to read a stable
-catalog raises an explicit retry error rather than returning incomplete results.
-Cleanup failure may leave harmless unreferenced name shards.
+After reservation releases the catalog lock, creation takes the signal lock,
+then the catalog lock for publication. Before publishing signal HEAD, record a
+durable creation intent. Publish the signal commit and paired recovery pages,
+then set the shard's live flag and clear the intent in one catalog HEAD replacement.
+Readers resolve pending names against signal HEADs: committed creations are visible,
+uncommitted ones excluded. Full deletion uses the same intent protocol and clears
+the live flag after its empty checkpoint commits. Keep the name/location entry
+for recreation. Pending names override cached membership in both directions.
+Catalog finalization failures after a durable signal commit raise
+`CatalogIncompleteError(committed=True)`. Measurement updates and partial deletions
+never acquire the catalog lock or invalidate the name cache.
 
-`rebuild_catalog()` scans signal HEADs/manifests, without reading measurement
-pages, and atomically replaces the derived catalog. It holds only the catalog
-lock; existing-signal writers can continue. It removes pending intents and old
-name shards. Corrupt caches require this explicit repair; direct-name data reads
-remain independent. Integrity checking enumerates authoritative signal HEADs and
-compares the name catalog, so a missing catalog entry cannot hide data from it.
-Page-only recovery rebuilds the name catalog from the reconstructed signal HEADs.
+After durable catalog publication, retire replaced shards. Readers encountering
+a retired captured shard retry against the newer HEAD. If HEAD is unchanged, a
+missing shard is corruption. Repeated catalog changes cause an explicit retry
+error, never a partial search result. Cleanup failure may leave unreferenced
+shards. Ambiguous remote reservation/publication keeps the catalog lock held until
+reconciliation, consistent with the backend's mutation protocol.
 
-Stores written by 0.0.0 without this catalog remain readable. Their first writable
-search or new-signal creation builds it once; read-only searches retain the old
-HEAD-scan fallback until a writable client builds it. All writers must use the
-catalog-aware implementation once the catalog exists. After an older writer adds
-signals, stop that writer and explicitly rebuild before relying on name search.
-The measurement/page format is unchanged; the catalog is never recovery authority.
+`rebuild_catalog()` traverses radix branches at arbitrary depth, reads signal
+identities and HEADs/manifests, and atomically publishes a new catalog and next
+ordinal. It does not enumerate data/index subtrees or read measurement payloads.
+It holds only the catalog lock, allowing existing-signal writers to continue.
+All anchored locations survive, including reservations and deletion tombstones.
+A surviving manifest supplies a missing identity; the next writer can recreate
+its anchor. Duplicate names or ordinals are corruption. Reservations lacking both
+identity and HEAD may be dropped, since no successful allocating writer received
+them. Rebuild also clears interrupted intents and retires unreferenced shards.
+
+Missing catalog metadata is rebuilt on the first writable search or new-signal
+allocation; read-only searches enumerate signal metadata. Corrupt catalogs require
+explicit rebuild. Exact reads can fall back to identity/HEAD scans when the derived
+catalog is unavailable. Integrity checks independently enumerate authoritative
+identities and HEADs, compare both locations and name membership, and inspect data
+pages so cache omissions cannot hide corruption. Page-only reconstruction allocates
+new signal locations and rebuilds discovery. The catalog is never recovery authority
+and this repair path is not compatibility with superseded layouts.
 
 Use an immutable ordered tree of bounded descriptor blocks. Leaf nodes contain
 page descriptors sorted by first timestamp; internal nodes contain child keys,
@@ -651,9 +754,9 @@ not branch on URL strings or call filesystem functions directly.
 | --- | --- | --- | --- |
 | `/data/db` on a detected local filesystem | Local file operations | Per-signal process lock, e.g. `flock`, plus an in-process mutex | Same-directory temporary file and atomic replace |
 | `/mnt/share/db` on detected NFS | Mounted network filesystem | Atomic exclusive `mkdir` of the signal lock directory | Atomic replace under the lock, with profile-specific cache refresh |
-| `/eos/.../db` on detected EOS/FUSE | EOS mount adapter | Verified EOS namespace exclusive-create operation | Verified namespace replace/move operation |
+| `/eos/.../db` on detected EOS/FUSE or SSHFS | XRootD via an explicit `xrootd_url` mapping for writes; mount may serve read-only snapshots | Exclusive EOS namespace `mkdir`, shared with native clients | Server sync/close, checksum confirmation, then atomic rename |
 | Any filesystem path without a recognized specialized profile | Generic filesystem operations | Exclusive directory lock | Atomic replace under the lock, subject to required capabilities |
-| `root://host//eos/.../db` | XRootD client | EOS/XRootD deployment's exclusive namespace operation | Its atomic publication operation, after upload completion |
+| `root://host//eos/.../db` | XRootD client | EOS namespace `mkdir` or generic exclusive `NEW` owner-file creation | Its atomic publication operation, after upload completion |
 | `s3://bucket/prefix` | Object client | Conditional HEAD update; conflicting writers retry | `If-None-Match: *` for creation; `If-Match` for replacement |
 
 Profiles are implementation contracts, not claims that every server exposing a
@@ -678,6 +781,16 @@ evidence of these guarantees; see the [EOS client documentation](https://eos-doc
 This backend qualification is an implementation prerequisite, not a reason to
 restore SQLite. If primitives are insufficient, writable access needs a configured
 coordinator providing the same contract; otherwise that profile is read-only.
+
+SSHFS and EOS mounts may finish local close/flush before EOS commits the file.
+Do not publish HEAD based on local close, sleeps, or rereading through that same
+cache. The implemented conservative policy routes the entire operation through
+an authoritative XRootD URL, supplied as `DB(path, mode="a", xrootd_url=...)`. Path and URL
+can differ: at CERN `/eos/project-a/...` maps to `/eos/project/a/...` on
+`eosproject-a.cern.ch`. No generic mapping can be inferred from an SSHFS hostname.
+Unconfigured EOS/SSHFS mounts are read-only and use fully verified owned buffers,
+not mmap views of files that can still be filling. Cache lag may still yield an
+older valid commit. Explicit filesystem profile overrides cannot bypass this rule.
 
 The EOS adapter should evaluate the documented atomic-upload facility
 (`eos.atomic=1`) as a publication primitive; it defers visibility of the target
@@ -736,12 +849,16 @@ explicitly and must not acknowledge an upload merely queued in a client buffer.
 
 ## Write algorithm and commit protocol
 
-### Parallel bulk ingestion
+### Concurrent ordinary writes and streaming
 
 The expected deployment runs one owning worker per signal, with multiple signals
 in flight. Each worker uses an independent `DB` instance; there is no shared
-mutable Python dataset or globally updated signal index. On lock-based backends,
-an `ingest` session may retain its signal guard across commit groups and keep the
+mutable Python dataset or globally updated signal index. Workers call ordinary
+`store()`; lock acquisition and same-signal serialization are automatic. Concurrent
+DB creation also uses the ordinary constructor. No separate parallel API or worker
+registration exists. `ingest` is an optional bounded-stream input method using the
+same commit machinery. On lock-based backends, an `ingest` session may retain its
+signal guard across commit groups and keep the
 current manifest/index nodes in memory. Other signals and all readers continue
 independently. Object-store sessions retain their expected HEAD revision and use
 conditional publication. Competing workers for the same signal remain supported
@@ -803,7 +920,7 @@ planner, on every backend:
    explicit compaction.
 5. Finish and publish every new immutable page. Compute its exact descriptors and
    update count/byte totals from changed subtree summaries. Per-schema value
-   ranges can be reduced from descriptor metadata by `info`; computing them must
+   ranges can be reduced from descriptor metadata by `info_signal`; computing them must
    not require a scan of every historical descriptor on each fresh-data commit.
 6. Write changed index blocks and ancestor paths, then a small immutable manifest
    with a fresh commit ID, parent commit ID, generation `old + 1` (first is 1),
@@ -915,7 +1032,7 @@ whole timestamp section; sparse on-disk timestamp indexes are a later optimizati
 `count_signal` sums descriptor counts for fully covered pages and reads only
 timestamp sections of partial pages. If there are `n` records in the selected
 interval, the sampled count is `(n + skip) // (skip + 1)`, then capped by
-`max_count`. It never reads record payloads. `info` uses catalog metadata only;
+`max_count`. It never reads record payloads. `info_signal` uses catalog metadata only;
 per-schema ranges may require reducing page descriptors, cached by index-root
 digest. It never scans value payloads to rebuild statistics on the write path.
 `get_signal` allocates its final arrays once, or collects bounded batches and
@@ -1154,9 +1271,11 @@ path, but do not use it as the default implementation of every write.
    immutable descriptor index, small manifests and checkpoint/delta recovery.
    Add fault injection around every publication step. Confirm that opening,
    searching and reading need no SQLite file or service.
-4. **Bulk ingestion and DB reads/writes.** First implement `ingest` with one owner
-   per signal, bounded input/I/O buffers and grouped commits. Run several worker
-   processes on different signals and establish the throughput baseline below.
+4. **Bulk ingestion and DB reads/writes.** Exercise ordinary `store()` from
+   independent workers, including simultaneous database creation and same-signal
+   collisions. Add bounded input/I/O buffers and grouped commits for streaming
+   input through `ingest`. Run several worker processes on different signals and
+   establish the throughput baseline below.
    Verify both fresh append and disjoint historical-window insertion without
    reading old payloads. Then integrate the exceptional overlap planner,
    metadata-only counts, tuple
@@ -1270,7 +1389,7 @@ live data without a surviving commit record.
 The initial index uses at most 128 descriptors per leaf and 64 children per
 internal node, with a 256 KiB serialized node ceiling and a bounded node cache.
 Append commits copy only affected paths; the final ingest checkpoint traverses
-the roster once. `info` currently reduces page metadata on demand; it does not
+the roster once. `info_signal` currently reduces page metadata on demand; it does not
 read measurement payloads. Normal mmap reads validate envelope metadata; full
 payload and section verification is explicitly available through `check(full=True)`.
 Upsert reads of old pages always verify their full hashes before rewriting them.
@@ -1279,12 +1398,48 @@ Local filesystems use `flock`; NFS and generic mounted filesystems use exclusive
 directory locks and atomic rename. Mount detection and a persisted coordination
 family prevent mixing incompatible lock protocols. The filesystem implementation
 is tested locally, including directory locks and independent processes. NFS
-qualification on the target servers remains outstanding. EOS writable access,
-native XRootD, and S3 are rejected until their deployment-specific publication
-adapters are implemented and qualified; they are not silently treated as local.
+qualification on the target servers remains outstanding. EOS writable access
+via native XRootD is now implemented; weak mounted writes require that transport
+through `xrootd_url`. S3 remains unsupported.
 
-Still pending: remote adapters and multi-host qualification, a pipelined remote
-transfer path, offline reclamation/repacking, and a legacy migration command.
+`backends/xrootd.py` uses the optional XRootD Python bindings, bounded streamed
+uploads, server sync and close, remote size/checksum confirmation, server-side
+rename, and content confirmation of mutable metadata. EOS staging uploads use
+`eos.atomic=1`; the generic XRootD profile uses unique staging names and POSC.
+The server must implement its profile's exclusive creation and atomic
+rename-overwrite. Page bytes are always fully verified on remote reads. `io_timeout` bounds each protocol
+request; `visibility_timeout` bounds read/confirmation retries (an in-progress
+request can extend the retry window by its own I/O timeout). There is no local
+page cache or per-file subprocess. Normal local filesystem reads still use mmap.
+
+Unknown mutation outcomes disable that writer and retain held locks, including
+catalog locks. They must propagate through commit/catalog finalization without
+being reclassified as rollback merely because the old HEAD remains readable.
+EOS uses exclusive namespace mkdir (`eos-mkdir`) with a unique owner record in
+`.LOCK`; even an incomplete directory remains locked. Generic XRootD uses
+`OpenFlags.NEW` on `.LOCK/owner` (`xrootd-exclusive`), without POSC or `eos.atomic`
+on that owner file. Empty owners remain locked after a crash; successful release
+verifies the token and removes only the owner file, keeping its directory. Native
+probes found generic mkdir to be idempotent and EOS to accept concurrent NEW opens
+before the first close, so neither primitive is used indiscriminately. Families
+are persisted and incompatible writable clients are rejected. No automatic lease
+expiration or lock stealing is used. This is not a distributed fencing service.
+
+Synthetic tests run against EOS in `/eos/project-a/abpdata/tests` cover parallel
+fresh signals, updates, catalog rebuilds, full integrity checks, cross-process
+lock contention, and mounted aliases/readers. Failure injection covers delayed
+visibility and unknown mutations. These establish the exercised behavior, not
+durability under server failover or a multi-host network partition.
+
+Still pending: S3 and multi-host fault qualification, asynchronous transfer
+pipelining, native remote offline recovery/salvage, offline reclamation/repacking,
+and a general legacy migration/retirement command. The bounded EOS pilot runner in
+`examples/migrate_legacy_pilot.py` reads a frozen manifest, verifies uncompressed
+numeric PyTimber pages through `pagestore.legacy.migration`, writes independent
+signals through ordinary `DB.ingest()`, and verifies fresh-reader record digests.
+It records source identities and immutable attempts outside the destination store,
+rejects partial/conflicting intervals, and never modifies source files. Quarantined
+source issues and overlap resolution remain explicit migration work.
 The local synthetic benchmark in `examples/benchmark.py` compares parallel
 fresh-signal ingestion with direct writes using the same filesystem publication
 and fsync routine. Actual NXCALS extraction and cold network time-to-first-data

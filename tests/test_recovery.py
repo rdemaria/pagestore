@@ -25,7 +25,7 @@ def flip(path, offset):
 
 def test_flat_page_only_recovery_and_empty_store(tmp_path):
     source = tmp_path / "source"
-    with DB(source, default_max_page_size=4096) as db:
+    with DB(source, default_max_page_size=4096, mode="a") as db:
         db.store({"a": (np.arange(100), np.arange(100)), "b": (["2024-01-01"], [1.5])})
         db.store({"a": ([3, 101], [333, 101])})
         db.configure_signal("a", max_page_size=16384)
@@ -36,15 +36,15 @@ def test_flat_page_only_recovery_and_empty_store(tmp_path):
     assert report.complete, report.errors
     with DB(tmp_path / "new", mode="r") as db:
         assert db.check(full=True).ok
-        assert db.info("a").max_page_size == 16384
+        assert db.info_signal("a").max_page_size == 16384
         for name in expected:
             for actual, wanted in zip(db.get_signal(name), expected[name]):
                 np.testing.assert_array_equal(actual, wanted)
-    with DB(tmp_path / "empty", default_max_page_size=12345):
+    with DB(tmp_path / "empty", default_max_page_size=12345, mode="a"):
         pass
     flatten(tmp_path / "empty", tmp_path / "empty-flat")
     assert recover(tmp_path / "empty-flat", tmp_path / "empty-new").complete
-    with DB(tmp_path / "empty-new", default_max_page_size=12345) as db:
+    with DB(tmp_path / "empty-new", default_max_page_size=12345, mode="a") as db:
         assert db.search() == []
 
 
@@ -52,7 +52,7 @@ def test_flat_page_only_recovery_and_empty_store(tmp_path):
     "location", ["prefix", "primary", "backup", "trailer", "digest", "padding"]
 )
 def test_duplicate_header_repair(tmp_path, location):
-    with DB(tmp_path / "source") as db:
+    with DB(tmp_path / "source", mode="a") as db:
         db.store({"x": ([1, 2], [10, 20])})
         manifest, _ = db._head("x")
         descriptor = next(db._index(manifest).pages())
@@ -84,7 +84,7 @@ def test_duplicate_header_repair(tmp_path, location):
 
 
 def test_payload_corruption_cannot_be_repaired(tmp_path):
-    with DB(tmp_path / "source") as db:
+    with DB(tmp_path / "source", mode="a") as db:
         db.store({"x": ([1, 2], [10, 20])})
         manifest, _ = db._head("x")
         d = next(db._index(manifest).pages())
@@ -98,7 +98,7 @@ def test_payload_corruption_cannot_be_repaired(tmp_path):
 
 
 def test_one_bad_recovery_copy_and_delta_replay(tmp_path):
-    with DB(tmp_path / "source", default_max_page_size=4000) as db:
+    with DB(tmp_path / "source", default_max_page_size=4000, mode="a") as db:
         for start in (0, 100, 200):
             db.store(
                 {"x": (np.arange(start, start + 100), np.arange(start, start + 100))}
@@ -109,12 +109,12 @@ def test_one_bad_recovery_copy_and_delta_replay(tmp_path):
     report = recover(tmp_path / "source", tmp_path / "new")
     assert report.complete, report.errors
     assert report.ignored_pages == 4
-    with DB(tmp_path / "new") as db:
+    with DB(tmp_path / "new", mode="a") as db:
         assert db.count_signal("x") == 300
 
 
 def test_missing_delta_refuses_silent_rollback(tmp_path):
-    with DB(tmp_path / "source") as db:
+    with DB(tmp_path / "source", mode="a") as db:
         db.store({"x": ([0], [0])})
         middle = db.store({"x": ([1], [1])})["x"].commit_id
         db.store({"x": ([2], [2])})
@@ -125,7 +125,7 @@ def test_missing_delta_refuses_silent_rollback(tmp_path):
 
 
 def test_failure_before_head_leaves_old_snapshot(tmp_path, monkeypatch):
-    with DB(tmp_path / "source") as db:
+    with DB(tmp_path / "source", mode="a") as db:
         db.store({"x": ([0], [0])})
         original = db._backend.publish
 
@@ -141,7 +141,7 @@ def test_failure_before_head_leaves_old_snapshot(tmp_path, monkeypatch):
     report = recover(tmp_path / "source", tmp_path / "new")
     assert report.complete
     assert len(report.unconfirmed_pages) == 1
-    with DB(tmp_path / "new") as db:
+    with DB(tmp_path / "new", mode="a") as db:
         assert db.count_signal("x") == 1
 
 
@@ -149,7 +149,7 @@ def test_failure_before_head_leaves_old_snapshot(tmp_path, monkeypatch):
 def test_visible_commit_recovery_failure_is_explicit_and_repairable(
     tmp_path, monkeypatch, failure
 ):
-    with DB(tmp_path / "source") as db:
+    with DB(tmp_path / "source", mode="a") as db:
         db.store({"x": ([0], [0])})
         original = db._backend.publish
 
@@ -181,11 +181,11 @@ def test_visible_commit_recovery_failure_is_explicit_and_repairable(
 
 
 def test_next_writer_repairs_incomplete_predecessor(tmp_path):
-    with DB(tmp_path / "source") as db:
+    with DB(tmp_path / "source", mode="a") as db:
         commit = db.store({"x": ([0], [0])})["x"].commit_id
     for path in (tmp_path / "source").rglob(f"{commit}.*.pg"):
         path.unlink()
-    with DB(tmp_path / "source") as db:
+    with DB(tmp_path / "source", mode="a") as db:
         db.store({"x": ([1], [1])})
         assert db.check(full=True).ok
     assert recover(tmp_path / "source", tmp_path / "new").complete

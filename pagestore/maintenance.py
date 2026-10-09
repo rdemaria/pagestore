@@ -4,29 +4,43 @@ from dataclasses import asdict
 from pathlib import Path
 from uuid import uuid4
 
-from .backends import FileBackend
-from .catalog import canonical, digest, envelope, read_ref, signal_id, signal_prefix
+from .backends import FileBackend, require_filesystem_paths
+from .catalog import (
+    STORE_FORMAT_VERSION,
+    canonical,
+    digest,
+    envelope,
+    read_ref,
+    signal_id,
+    signal_prefix,
+)
 from .errors import CorruptionError
 from .model import CheckReport, RecoveryReport
 from .page_format import decode, read_page, repair_bytes
-from .page_index import PageIndex
 from .salvage import salvage
 
 
 def check(db, *, full=False):
+    """Return the non-mutating integrity CheckReport described by DB.check()."""
     report = CheckReport()
     backend = db._backend
     for copy in (0, 1):
         key = f"pages/recovery/store-{db._config['config_id']}.{copy}.pg"
         try:
-            record = read_page(backend.path(key), full=full).recovery()
+            record = backend.read_page(key, full=full).recovery()
             if record["config"] != db._config:
                 raise CorruptionError("Root recovery configuration disagrees")
             report.pages += 1
         except (OSError, CorruptionError, KeyError) as exc:
             report.errors.append(f"{key}: {exc}")
     try:
-        names = db._scan_signal_names()
+        names, ordinals = {}, set()
+        for entry in db._scan_signal_entries():
+            name, ordinal = entry["name"], entry["ordinal"]
+            if name in names or ordinal in ordinals:
+                raise CorruptionError("Duplicate signal name or allocation ordinal")
+            names[name] = ordinal
+            ordinals.add(ordinal)
     except (OSError, CorruptionError, KeyError) as exc:
         report.errors.append(f"Catalog: {exc}")
         return report
@@ -34,17 +48,19 @@ def check(db, *, full=False):
     # fresh reader to verify shard checksums even if db already cached their names.
     from .name_catalog import NameCatalog
 
-    if backend.exists(NameCatalog.HEAD):
+    visible = []
+    for name, ordinal in sorted(names.items()):
         try:
-            if NameCatalog(db).names() != names:
-                raise CorruptionError(
-                    "Name catalog differs from signal HEADs; rebuild_catalog() required"
-                )
-        except (OSError, CorruptionError, KeyError) as exc:
-            report.errors.append(f"Name catalog: {exc}")
-    for name in names:
-        try:
-            manifest, _ = db._head(name)
+            manifest, _ = db._head(
+                name,
+                include_deleted=True,
+                missing_ok=True,
+                prefix=signal_prefix(name, ordinal),
+            )
+            if manifest is None:
+                continue
+            if manifest["root"] is not None:
+                visible.append(name)
             for d in db._index(manifest).pages():
                 try:
                     db._read_data(d, manifest, full=full)
@@ -57,12 +73,9 @@ def check(db, *, full=False):
                     raise CorruptionError("Recovery ancestry cycle")
                 seen.add(manifest["commit_id"])
                 for copy in (0, 1):
-                    key = (
-                        signal_prefix(name)
-                        + f"/pages/recovery/{manifest['commit_id']}.{copy}.pg"
-                    )
+                    key = db._recovery_key(manifest, copy)
                     try:
-                        record = read_page(backend.path(key), full=full).recovery()
+                        record = backend.read_page(key, full=full).recovery()
                         if digest(canonical(record)) != manifest["recovery_sha256"]:
                             raise CorruptionError(
                                 "Recovery content differs from manifest"
@@ -81,6 +94,19 @@ def check(db, *, full=False):
                 manifest = parent
         except (OSError, CorruptionError, KeyError, ValueError) as exc:
             report.errors.append(f"{name}: {exc}")
+    if backend.exists(NameCatalog.HEAD):
+        try:
+            catalog = NameCatalog(db)
+            if catalog.names() != visible:
+                raise CorruptionError(
+                    "Name catalog differs from signal HEADs; rebuild_catalog() required"
+                )
+            if any(
+                catalog.location(name) != ordinal for name, ordinal in names.items()
+            ):
+                raise CorruptionError("Name catalog signal locations disagree")
+        except (OSError, CorruptionError, KeyError) as exc:
+            report.errors.append(f"Name catalog: {exc}")
     return report
 
 
@@ -134,10 +160,13 @@ def recover(source, destination):
 
     The source must be quiescent. A report with complete=False does not silently
     substitute an older generation for missing/corrupt committed measurements.
+    Empty deletion checkpoints are retained and listed in deleted_signals;
+    recovered_signals lists only live signals. Retired payloads are not restored.
     """
     from .db import DB, _page_key
     from .timestamps import decode_time
 
+    require_filesystem_paths(source, destination)
     source = Path(source).resolve()
     destination = Path(destination).resolve()
     if destination.exists() or destination == source or source in destination.parents:
@@ -198,6 +227,9 @@ def recover(source, destination):
             "Conflicting root configurations; select a consistent backup"
         )
         return report
+    if config.get("format_version") != STORE_FORMAT_VERSION:
+        report.errors.append("Unsupported source database format")
+        return report
     grouped = {}
     for record in records.values():
         if record["database_id"] != config["database_id"]:
@@ -218,9 +250,13 @@ def recover(source, destination):
     backend = FileBackend(destination)
     backend.mkdir(destination)
     # Coordination is a destination capability; measurement identity is preserved.
-    config = dict(config, coordination=backend.info.coordination, config_id=uuid4().hex)
+    config = dict(
+        config,
+        coordination=backend.info.coordination,
+        config_id=uuid4().hex,
+    )
     backend.publish("store.json", [envelope(config)])
-    with DB(destination) as db:
+    with DB(destination, mode="a") as db:
         for name, history in sorted(grouped.items()):
             try:
                 history.sort(key=lambda r: r["generation"], reverse=True)
@@ -243,6 +279,7 @@ def recover(source, destination):
                 ):
                     raise CorruptionError("Recovered page intervals overlap")
                 copied = []
+                prefix = db._signal_prefix(name, create=True)
                 for descriptor in roster:
                     validated = None
                     for path in data.get(descriptor["page_id"], []):
@@ -291,13 +328,13 @@ def recover(source, destination):
                             f"Missing or corrupt committed page {descriptor['page_id']}"
                         )
                     key = _page_key(
-                        signal_prefix(name),
+                        prefix,
                         descriptor["ordinal"],
                         descriptor["page_id"],
                     )
                     db._backend.publish(key, [validated])
                     copied.append(dict(descriptor, key=key))
-                index = PageIndex(db._backend, signal_prefix(name), latest["time_kind"])
+                index = db._new_index(name, latest["time_kind"])
                 index.update(copied)
                 parent = {
                     "commit_id": latest["commit_id"],
@@ -316,7 +353,10 @@ def recover(source, destination):
                     latest["max_page_size"],
                     checkpoint=True,
                 )
-                report.recovered_signals.append(name)
+                if copied:
+                    report.recovered_signals.append(name)
+                else:
+                    report.deleted_signals.append(name)
             except (OSError, CorruptionError, ValueError, KeyError) as exc:
                 report.errors.append(f"{name}: {exc}")
         db.rebuild_catalog()

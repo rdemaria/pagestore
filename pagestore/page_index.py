@@ -28,9 +28,10 @@ def _descriptor_meta(d):
 
 
 class PageIndex:
-    def __init__(self, backend, prefix, kind, root=None):
+    def __init__(self, backend, prefix, kind, root=None, *, next_ordinal=0):
         self.backend, self.prefix, self.kind = backend, prefix, kind
         self.root = root
+        self.next_ordinal = next_ordinal
         self.cache = OrderedDict()
 
     def _time(self, value):
@@ -144,7 +145,10 @@ class PageIndex:
             node = self._node(False, [self._flush(child) for child in node["items"]])
         if len(canonical(node)) > MAX_NODE_BYTES:
             raise ValueError("Index node exceeds its serialized size limit")
-        ref = write_immutable(self.backend, self.prefix + "/index", node)
+        ref = write_immutable(
+            self.backend, self.prefix + "/index", node, ordinal=self.next_ordinal
+        )
+        self.next_ordinal += 1
         ref.update({key: node[key] for key in ("first", "last", *AGGREGATES)})
         return ref
 

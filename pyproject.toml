@@ -21,6 +21,7 @@ classifiers = [
 
 [project.optional-dependencies]
 testing = ["pytest", "pytest-cov"]
+xrootd = ["xrootd>=5.6"]
 
 [project.urls]
 Homepage = "https://github.com/rdemaria/pagestore"

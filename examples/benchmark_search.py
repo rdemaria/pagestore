@@ -28,7 +28,7 @@ from benchmark_many_signals import (
 
 def rebuild(connection, directory):
     try:
-        with DB(directory) as db:
+        with DB(directory, mode="a") as db:
             start = perf_counter()
             count = db.rebuild_catalog()
             connection.send(

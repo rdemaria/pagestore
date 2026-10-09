@@ -6,12 +6,11 @@ from pathlib import Path
 import tempfile
 from uuid import UUID, uuid4
 
-from .backends import FileBackend
-from .catalog import canonical, envelope, signal_id, signal_prefix
+from .backends import FileBackend, require_filesystem_paths
+from .catalog import STORE_FORMAT_VERSION, canonical, envelope, signal_id
 from .errors import CorruptionError, PageStoreError
 from .model import DEFAULT_MAX_PAGE_SIZE, SalvageReport, integer
 from .page_format import read_salvage_page, repair_bytes
-from .page_index import PageIndex
 from .timestamps import decode_time
 
 
@@ -132,6 +131,7 @@ def salvage(source, destination, *, pages=None, reuse="copy", scratch_directory=
     """
     from .db import DB, _page_key
 
+    require_filesystem_paths(source, destination)
     source, destination = Path(source).resolve(), Path(destination).resolve()
     if not source.is_dir():
         raise NotADirectoryError(source)
@@ -171,7 +171,7 @@ def salvage(source, destination, *, pages=None, reuse="copy", scratch_directory=
             return report
         report.source_database_id = next(iter(identities))
         config = {
-            "format_version": 1,
+            "format_version": STORE_FORMAT_VERSION,
             "database_id": report.source_database_id,
             "config_id": uuid4().hex,
             "default_max_page_size": DEFAULT_MAX_PAGE_SIZE,
@@ -180,7 +180,7 @@ def salvage(source, destination, *, pages=None, reuse="copy", scratch_directory=
         }
         backend.publish("store.json", [envelope(config)])
         provenance_path = scratch / "provenance.jsonl"
-        with DB(destination) as db, provenance_path.open("wb") as provenance:
+        with DB(destination, mode="a") as db, provenance_path.open("wb") as provenance:
             for partition in sorted(scratch.glob("[0-9a-f][0-9a-f].jsonl")):
                 grouped = {}
                 with partition.open("rb") as stream:
@@ -193,13 +193,14 @@ def salvage(source, destination, *, pages=None, reuse="copy", scratch_directory=
                         continue
                     copied, entries = [], []
                     try:
+                        prefix = db._signal_prefix(name, create=True)
                         for item in selected:
                             current, raw = _candidate(Path(item["source"]))
                             if current != item:
                                 raise CorruptionError("Source changed during salvage")
                             descriptor = item["descriptor"]
                             key = _page_key(
-                                signal_prefix(name),
+                                prefix,
                                 descriptor["ordinal"],
                                 descriptor["page_id"],
                             )
@@ -217,7 +218,7 @@ def salvage(source, destination, *, pages=None, reuse="copy", scratch_directory=
                                 dict(item, destination_key=key, action=action)
                             )
                         kind = selected[0]["time_kind"]
-                        index = PageIndex(db._backend, signal_prefix(name), kind)
+                        index = db._new_index(name, kind)
                         index.update(copied)
                         commit = db._commit(
                             name,

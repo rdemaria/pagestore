@@ -28,7 +28,6 @@ import numpy as np
 
 import pagestore
 from pagestore import Batch, DB
-from pagestore.catalog import signal_prefix
 
 _writer = None
 _timestamps = None
@@ -46,7 +45,7 @@ def rss_bytes():
 
 def initialize_writer(directory, records):
     global _writer, _timestamps, _base_values
-    _writer = DB(directory)
+    _writer = DB(directory, mode="a")
     _timestamps = np.arange(records, dtype="int64")
     _base_values = _timestamps.astype("float64") / 32
 
@@ -393,7 +392,10 @@ def main():
                 stage["space_after_write"] = free_space(temporary)
                 # Check resource headroom from measured signal layout before scaling.
                 if not previous:
-                    footprint = scan_storage(directory / signal_prefix(signal_name(0)))
+                    with DB(directory, mode="r") as reader:
+                        footprint = scan_storage(
+                            directory / reader._signal_prefix(signal_name(0))
+                        )
                     remaining = args.signals - count
                     estimated_bytes = remaining * (
                         footprint["file_allocated_bytes"]

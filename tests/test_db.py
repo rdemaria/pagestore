@@ -5,7 +5,7 @@ from pagestore import Batch, DB, RaggedArray, SignalNotFoundError, StoreError
 
 
 def test_sort_duplicates_upsert_and_selection(tmp_path):
-    with DB(tmp_path / "db", default_max_page_size=4096) as db:
+    with DB(tmp_path / "db", default_max_page_size=4096, mode="a") as db:
         result = db.store({"a/path": ([3, 2, 1, 2], [30, 20, 10, 22])})["a/path"]
         assert (result.inserted, result.replaced, result.total) == (3, 0, 3)
         result = db.store({"a/path": ([2, 4], [23, 40])})["a/path"]
@@ -50,9 +50,9 @@ def test_many_pages_global_skip_and_no_old_payload_reads(tmp_path, monkeypatch):
 
     monkeypatch.setattr(index_module, "MAX_LEAF", 4)
     monkeypatch.setattr(index_module, "MAX_CHILDREN", 4)
-    with DB(tmp_path / "db", default_max_page_size=1) as db:
+    with DB(tmp_path / "db", default_max_page_size=1, mode="a") as db:
         db.store({"x": (np.arange(80), np.arange(80))})
-        before = set((tmp_path / "db").rglob("index/*.json"))
+        before = set((tmp_path / "db").rglob("index/**/*.json"))
         original = db._read_data
 
         def reject(*args, **kwargs):
@@ -60,7 +60,7 @@ def test_many_pages_global_skip_and_no_old_payload_reads(tmp_path, monkeypatch):
 
         monkeypatch.setattr(db, "_read_data", reject)
         db.store({"x": ([80, 81], [80, 81])})
-        after = set((tmp_path / "db").rglob("index/*.json"))
+        after = set((tmp_path / "db").rglob("index/**/*.json"))
         assert len(after - before) <= 8  # changed leaf and its ancestors only
         assert db.count_signal("x") == 82  # root aggregate, no payload read
         monkeypatch.setattr(db, "_read_data", original)
@@ -68,7 +68,7 @@ def test_many_pages_global_skip_and_no_old_payload_reads(tmp_path, monkeypatch):
         np.testing.assert_array_equal(
             db.get_signal("x", 7, 73, skip=5, max_count=8)[0], expected
         )
-        assert db.info("x").page_count == 82
+        assert db.info_signal("x").page_count == 82
         assert db.check(full=True).ok
 
 
@@ -93,7 +93,7 @@ def test_many_pages_global_skip_and_no_old_payload_reads(tmp_path, monkeypatch):
 )
 def test_value_dtypes_and_endianness(tmp_path, dtype):
     values = np.array([[1, 2], [3, 4]], dtype=dtype)
-    with DB(tmp_path / "db") as db:
+    with DB(tmp_path / "db", mode="a") as db:
         db.store({"x": (np.array([1, 2], dtype=">i8"), values)})
         t, actual = db.get_signal("x")
         np.testing.assert_array_equal(actual, values)
@@ -109,7 +109,7 @@ def test_mixed_schema_and_ragged_roundtrip(tmp_path):
         np.float64(9),
         np.array([], dtype="u2"),
     ]
-    with DB(tmp_path / "db") as db:
+    with DB(tmp_path / "db", mode="a") as db:
         db.store({"mix": ([1, 2, 3, 4], mixed)})
         t, actual = db.get_signal("mix")
         assert actual.shape == (4,)
@@ -136,23 +136,26 @@ def test_mixed_schema_and_ragged_roundtrip(tmp_path):
 
 
 def test_page_limit_settings_and_oversized_record(tmp_path):
-    with DB(tmp_path / "db") as db:
+    with DB(tmp_path / "db", mode="a") as db:
         db.store({"default": ([1], [2])})
-        assert db.info("default").max_page_size == 8 * 1024**2
+        assert db.info_signal("default").max_page_size == 8 * 1024**2
         db.store({"small": (np.arange(300), np.ones((300, 16)))}, max_page_size=8192)
-        assert db.info("small").page_count > 1
+        assert db.info_signal("small").page_count > 1
         manifest, _ = db._head("small")
         assert all(d["size"] <= 8192 for d in db._index(manifest).pages())
         db.configure_signal("small", max_page_size=32768)
         db.store({"small": ([301], np.ones((1, 16)))})
-        assert db.info("small").max_page_size == 32768
+        assert db.info_signal("small").max_page_size == 32768
         db.store({"large": ([1], np.ones((1, 8192)))}, max_page_size=8192)
-        assert db.info("large").page_count == 1 and db.info("large").stored_bytes > 8192
+        assert (
+            db.info_signal("large").page_count == 1
+            and db.info_signal("large").stored_bytes > 8192
+        )
         assert db.check(full=True).ok
 
 
 def test_stream_snapshot_and_array_lifetime(tmp_path):
-    with DB(tmp_path / "db") as db:
+    with DB(tmp_path / "db", mode="a") as db:
         db.store({"x": ([1, 2], [10, 20])})
         stream = db.iter_signal("x")
         stream.__enter__()
@@ -165,7 +168,7 @@ def test_stream_snapshot_and_array_lifetime(tmp_path):
 
 
 def test_validation_before_write_and_partial_store(tmp_path):
-    with DB(tmp_path / "db") as db:
+    with DB(tmp_path / "db", mode="a") as db:
         assert db.store({"empty": ([], [])}) == {}
         assert db.search() == []
         with pytest.raises(ValueError):
@@ -190,7 +193,7 @@ def test_validation_before_write_and_partial_store(tmp_path):
 def test_randomized_upserts(tmp_path):
     rng = np.random.default_rng(451)
     expected = {}
-    with DB(tmp_path / "db", default_max_page_size=3500) as db:
+    with DB(tmp_path / "db", default_max_page_size=3500, mode="a") as db:
         for _ in range(20):
             times = rng.integers(-100, 100, size=40)
             values = rng.normal(size=40)
@@ -205,20 +208,20 @@ def test_randomized_upserts(tmp_path):
 
 
 def test_statistics_empty_records_and_fixed_string_widths(tmp_path):
-    with DB(tmp_path / "db") as db:
+    with DB(tmp_path / "db", mode="a") as db:
         db.store(
             {
                 "float": ([1, 2, 3, 4], [np.nan, np.inf, -np.inf, 3.0]),
                 "empty": ([1, 2], np.empty((2, 0), dtype="f4")),
             }
         )
-        stats = db.info("float").schemas[0]
+        stats = db.info_signal("float").schemas[0]
         assert (
             stats["min"] == -np.inf
             and stats["max"] == np.inf
             and stats["nan_count"] == 1
         )
-        assert db.info("empty").schemas[0]["min"] is None
+        assert db.info_signal("empty").schemas[0]["min"] is None
         db.store(
             {
                 "strings": [
@@ -230,5 +233,5 @@ def test_statistics_empty_records_and_fixed_string_widths(tmp_path):
         times, values = db.get_signal("strings")
         assert values[0].dtype == np.dtype("U8") and values[1].dtype == np.dtype("U4")
         db.store({"copy": (times, values)})
-        assert db.info("copy").schemas == db.info("strings").schemas
+        assert db.info_signal("copy").schemas == db.info_signal("strings").schemas
         assert db.check(full=True).ok
