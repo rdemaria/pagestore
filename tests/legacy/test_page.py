@@ -1,7 +1,7 @@
 import numpy as np
 
-from pagestore import Page, Data
-from pagestore.page import num2path
+from pagestore.legacy import Page, Data
+from pagestore.legacy.page import num2path
 
 
 def check_with_data(self, data):

@@ -1,6 +1,6 @@
 import numpy as np
 
-from pagestore import Data, DataSet
+from pagestore.legacy import Data, DataSet
 
 
 def mk_data(a, b, n, name):

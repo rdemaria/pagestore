@@ -1,6 +1,6 @@
 import numpy as np
 
-from pagestore import Data
+from pagestore.legacy import Data
 
 
 def mk_data(a, b, n, name):
@@ -107,8 +107,8 @@ def test_filter():
 def test_count():
     data = mk_data(-40, 60, 101, "test")
     assert data.count() == 101
-    assert data.count(idx1=0) == 61
-    assert data.count(idx2=0) == 41
+    assert data.count(t1=0) == 61
+    assert data.count(t2=0) == 41
     assert data.count(limit=3) == 3
     assert data.count(offset=3, limit=3) == 3
     assert data.count(offset=3, limit=3, skip=1) == 2

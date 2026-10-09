@@ -126,36 +126,36 @@ class Data:
         rec = np.concatenate((self.rec, data.rec))
         return Data(idx, rec, self.name)
 
-    def delete(self, idx1, idx2):
-        ii1 = np.where(self.idx >= idx1)[0][0]
-        ii2 = np.where(self.idx <= idx2)[0][-1] + 1
+    def delete(self, t1, t2):
+        ii1 = np.where(self.idx >= t1)[0][0]
+        ii2 = np.where(self.idx <= t2)[0][-1] + 1
         self.idx = self.idx[ii1:ii2]
         self.rec = self.rec[ii1:ii2]
         # return self
 
-    def trim(self, idx1, idx2):
-        ii1 = np.where(self.idx >= idx1)[0][0]
-        ii2 = np.where(self.idx <= idx2)[0][-1] + 1
+    def trim(self, t1, t2):
+        ii1 = np.where(self.idx >= t1)[0][0]
+        ii2 = np.where(self.idx <= t2)[0][-1] + 1
         return Data(self.idx[ii1:ii2], self.rec[ii1:ii2], self.name)
 
     def filter(self, mask):
         return Data(self.idx[mask], self.rec[mask], self.name)
 
-    def iterate(self, func=lambda i, r: (i, r), idx1=None, idx2=None):
-        for i, r in self.iter(idx1, idx2):
+    def iterate(self, func=lambda i, r: (i, r), t1=None, t2=None):
+        for i, r in self.iter(t1, t2):
             res = func(i, r)
         return res
 
-    def iter(self, idx1=None, idx2=None):
-        ii1 = None if idx1 is None else np.where(self.idx >= idx1)[0][0]
-        ii2 = None if idx2 is None else np.where(self.idx <= idx2)[0][-1] + 1
+    def iter(self, t1=None, t2=None):
+        ii1 = None if t1 is None else np.where(self.idx >= t1)[0][0]
+        ii2 = None if t2 is None else np.where(self.idx <= t2)[0][-1] + 1
         for i, r in zip(self.idx[ii1:ii2], self.rec[ii1:ii2]):
             yield i, r
 
     def select(
         self,
-        idx1=None,
-        idx2=None,
+        t1=None,
+        t2=None,
         idx_test=None,
         rec_test=None,
         limit=None,
@@ -164,8 +164,8 @@ class Data:
     ):
         """
         Filter data based on the intersection of the following conditions
-          self.idx >= idx1
-          self.idx <= idx2
+          self.idx >= t1
+          self.idx <= t2
           map(idx_test,self.idx)
           map(rec_test,self.rec)
 
@@ -173,7 +173,7 @@ class Data:
           idx[mask][offset:offset+limit:skip+1]
           rec[mask][offset:offset+limit:skip+1]
         """
-        mask = self.mask(idx1, idx2, idx_test, rec_test)
+        mask = self.mask(t1, t2, idx_test, rec_test)
         if limit is None:
             limit = len(self.idx)
         if filter is None:
@@ -188,8 +188,8 @@ class Data:
 
     def count(
         self,
-        idx1=None,
-        idx2=None,
+        t1=None,
+        t2=None,
         idx_test=None,
         rec_test=None,
         limit=None,
@@ -198,8 +198,8 @@ class Data:
     ):
         """
         Count data based on the intersection of the following conditions
-          self.idx >= idx1
-          self.idx <= idx2
+          self.idx >= t1
+          self.idx <= t2
           map(idx_test,self.idx)
           map(rec_test,self.rec)
 
@@ -208,21 +208,21 @@ class Data:
         """
         if limit is None:
             limit = len(self.idx)
-        mask = self.mask(idx1, idx2, idx_test, rec_test)
+        mask = self.mask(t1, t2, idx_test, rec_test)
         return mask[offset : offset + limit : skip + 1].sum()
 
-    def mask(self, idx1=None, idx2=None, idx_test=None, rec_test=None):
+    def mask(self, t1=None, t2=None, idx_test=None, rec_test=None):
         """
         Return boolean mask based on the intersection of the following conditions
-          self.idx >= idx1
-          self.idx <= idx2
+          self.idx >= t1
+          self.idx <= t2
           filter(self.idx,self.rec)
         """
         mask = np.ones(len(self.idx), dtype=bool)
-        if idx1 is not None:
-            mask &= self.idx >= idx1
-        if idx2 is not None:
-            mask &= self.idx <= idx2
+        if t1 is not None:
+            mask &= self.idx >= t1
+        if t2 is not None:
+            mask &= self.idx <= t2
         if idx_test is not None:
             mask &= np.fromiter(map(idx_test, self.idx), dtype=bool)
         if rec_test is not None:
@@ -258,7 +258,7 @@ class Data:
 
 
 class DataSet:
-    def __init__(self, dataset={}):
+    def __init__(self, dataset={}, idx_adapter=None):
         self.dataset = {}
         self.store(dataset)
 
@@ -279,8 +279,8 @@ class DataSet:
     def count(
         self,
         pattern_or_list=None,
-        idx1=None,
-        idx2=None,
+        t1=None,
+        t2=None,
         idx_test=None,
         rec_test=None,
         limit=None,
@@ -289,7 +289,7 @@ class DataSet:
     ):
         res = {
             name: self.dataset[name].count(
-                idx1, idx2, idx_test, rec_test, limit, skip, offset
+                t1, t2, idx_test, rec_test, limit, skip, offset
             )
             for name in self.search(pattern_or_list)
         }
@@ -298,8 +298,8 @@ class DataSet:
     def select(
         self,
         pattern_or_list=None,
-        idx1=None,
-        idx2=None,
+        t1=None,
+        t2=None,
         idx_test=None,
         rec_test=None,
         limit=None,
@@ -308,19 +308,19 @@ class DataSet:
     ):
         res = {
             name: self.dataset[name].select(
-                idx1, idx2, idx_test, rec_test, limit, skip, offset
+                t1, t2, idx_test, rec_test, limit, skip, offset
             )
             for name in self.search(pattern_or_list)
         }
         return DataSet(res)
 
-    def get(self, pattern_or_list=None, idx1=None, idx2=None):
-        res = {self.get_data(name, idx1, idx2) for name in self.search(pattern_or_list)}
+    def get(self, pattern_or_list=None, t1=None, t2=None):
+        res = {self.get_data(name, t1, t2) for name in self.search(pattern_or_list)}
         return DataSet(res)
 
-    def get_data(self, name, idx1, idx2, limit=None, filter=None, skip=1):
+    def get_data(self, name, t1, t2, limit=None, filter=None, skip=1):
         data = self.dataset[name].trim(
-            idx1, idx2, limit=limit, filter=filter, skip=skip
+            t1, t2, limit=limit, filter=filter, skip=skip
         )
         return data
 

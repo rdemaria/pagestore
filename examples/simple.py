@@ -1,11 +1,14 @@
-from numpy import array
+"""Run after installing the package, or with PYTHONPATH=. from the repository."""
 
-from pagestore import PageStore
+from tempfile import TemporaryDirectory
 
-db = PageStore("./localdb")
-db.store({"a": ([1, 2, 3], [0.1, 0.2, 0.3])})
-db.store({"a": ([3, 4, 5], [0.35, 0.45, 0.55])})
+from pagestore import DB
 
-res = db.get("a", 2, 4).to_dict()
-
-res == {"a": (array([2, 3, 4]), array([0.2, 0.3, 0.45]))}
+with TemporaryDirectory() as directory:
+    with DB(directory) as db:
+        db.store({"temperature": ([1, 2, 3], [10.0, 11.0, 12.0])})
+        db.store({"temperature": ([3, 4], [12.5, 13.0])})
+        print(db.get_signal("temperature", 2, 4))
+        db.store({"beam": (["2026-01-01 12:00:00.123456789"], [42.0])}, timezone="cern")
+        print(db.get_signal("beam"))
+        print(db.check(full=True))

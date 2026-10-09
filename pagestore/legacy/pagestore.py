@@ -8,6 +8,11 @@ from .data import Data, DataSet
 
 sqlite3.register_adapter(np.int64, int)
 
+"""
+Code conventions:
+    idx1, idx2 internal api
+    t1,t2 external api
+"""
 
 class PageStore:
     def __init__(self, pagedir, dbfile=None, max_page_size=10000000):
@@ -233,7 +238,7 @@ class PageStore:
                 self.store_data(Data(idx, rec, name))
 
     # Extraction methods
-    def get_data(self, name, idx1=-np.infty, idx2=np.infty):
+    def get_data(self, name, idx1=-np.inf, idx2=np.inf):
         pages = self.get_pages_between(name, idx1, idx2)
 
         data = None
@@ -253,7 +258,7 @@ class PageStore:
             lst = pattern_or_list
             return [k for k in lst if self.count_pages(k) > 0]
 
-    def get(self, pattern_or_list, idx1=-np.infty, idx2=np.infty):
+    def get(self, pattern_or_list, idx1=-np.inf, idx2=np.inf):
         res = {
             name: self.get_data(name, idx1, idx2)
             for name in self.get_names(pattern_or_list)
@@ -262,7 +267,7 @@ class PageStore:
 
     # Consistency check
     def check(self):
-        last = -np.infty
+        last = -np.inf
         for page in self.pages:
             if page.begin < last:
                 raise ValueError("page {page} collide")

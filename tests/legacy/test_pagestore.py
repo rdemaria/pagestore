@@ -2,7 +2,7 @@ import os
 
 import numpy as np
 
-from pagestore import Page, Data, PageStore
+from pagestore.legacy import Page, Data, PageStore
 
 
 def mk_data(a, b, n, name):
