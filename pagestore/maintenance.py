@@ -25,10 +25,22 @@ def check(db, *, full=False):
         except (OSError, CorruptionError, KeyError) as exc:
             report.errors.append(f"{key}: {exc}")
     try:
-        names = db.search()
+        names = db._scan_signal_names()
     except (OSError, CorruptionError, KeyError) as exc:
         report.errors.append(f"Catalog: {exc}")
         return report
+    # Never let a derived name cache hide signals from an integrity check. Use a
+    # fresh reader to verify shard checksums even if db already cached their names.
+    from .name_catalog import NameCatalog
+
+    if backend.exists(NameCatalog.HEAD):
+        try:
+            if NameCatalog(db).names() != names:
+                raise CorruptionError(
+                    "Name catalog differs from signal HEADs; rebuild_catalog() required"
+                )
+        except (OSError, CorruptionError, KeyError) as exc:
+            report.errors.append(f"Name catalog: {exc}")
     for name in names:
         try:
             manifest, _ = db._head(name)
@@ -306,5 +318,6 @@ def recover(source, destination):
                 report.recovered_signals.append(name)
             except (OSError, CorruptionError, ValueError, KeyError) as exc:
                 report.errors.append(f"{name}: {exc}")
+        db.rebuild_catalog()
         db._backend.publish("recovery-report.json", [canonical(asdict(report))])
     return report

@@ -3,3 +3,4 @@ include mktest
 recursive-include benchmarks *.md
 recursive-include examples *.py
 recursive-include tests *.py
+include CHANGELOG.md

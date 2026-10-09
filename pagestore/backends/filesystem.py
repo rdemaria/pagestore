@@ -185,6 +185,13 @@ class FileBackend:
         finally:
             pending.unlink(missing_ok=True)
 
+    def remove(self, key):
+        """Durably remove an owned, unreferenced metadata file."""
+        self._require_write()
+        path = self.path(key)
+        path.unlink(missing_ok=True)
+        self._sync_dir(path.parent)
+
     @contextmanager
     def lock(self, key, *, family=None):
         self._require_write()

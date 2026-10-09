@@ -1,0 +1,158 @@
+{"event": "start", "directory": "/tmp/pagestore-many-signals-_nud5zw4/store", "signals": 1000000}
+{"event": "measure_queries", "signals": 1000, "write_seconds": 6.183613129076548, "signals_per_second": 161.7177496596296}
+{"event": "search_exact_regex", "signals": 1000, "seconds": 0.04703801206778735, "matches": 1}
+{"event": "search_12_regex", "signals": 1000, "seconds": 0.04650043591391295, "matches": 12}
+{"event": "search_all", "signals": 1000, "seconds": 0.04624923598021269, "matches": 1000}
+{"event": "write_progress", "signals": 5352, "target": 10000, "stage_seconds": 13.519642709987238, "signals_per_second": 321.9019979562839}
+{"event": "measure_queries", "signals": 10000, "write_seconds": 19.458944126963615, "signals_per_second": 462.5122484178881}
+{"event": "search_exact_regex", "signals": 10000, "seconds": 0.43254633503966033, "matches": 1}
+{"event": "search_12_regex", "signals": 10000, "seconds": 0.42779306799639016, "matches": 12}
+{"event": "search_all", "signals": 10000, "seconds": 0.4336427479283884, "matches": 10000}
+{"event": "write_progress", "signals": 14352, "target": 100000, "stage_seconds": 13.79314399708528, "signals_per_second": 315.51907244060163}
+{"event": "write_progress", "signals": 22544, "target": 100000, "stage_seconds": 27.51789501903113, "signals_per_second": 455.8488209699427}
+{"event": "write_progress", "signals": 30736, "target": 100000, "stage_seconds": 41.264669447089545, "signals_per_second": 502.5122042135379}
+{"event": "write_progress", "signals": 38928, "target": 100000, "stage_seconds": 55.20979009906296, "signals_per_second": 523.9650422161445}
+{"event": "write_progress", "signals": 47120, "target": 100000, "stage_seconds": 68.87801665207371, "signals_per_second": 538.9237641308074}
+{"event": "write_progress", "signals": 55312, "target": 100000, "stage_seconds": 82.71347781701479, "signals_per_second": 547.818822226805}
+{"event": "write_progress", "signals": 63504, "target": 100000, "stage_seconds": 96.38210681406781, "signals_per_second": 555.1237856131884}
+{"event": "write_progress", "signals": 71696, "target": 100000, "stage_seconds": 110.24832991603762, "signals_per_second": 559.6093840785265}
+{"event": "write_progress", "signals": 79888, "target": 100000, "stage_seconds": 124.51155859604478, "signals_per_second": 561.2972866779298}
+{"event": "write_progress", "signals": 88080, "target": 100000, "stage_seconds": 138.350620990037, "signals_per_second": 564.3632058986042}
+{"event": "write_progress", "signals": 96160, "target": 100000, "stage_seconds": 149.2521937910933, "signals_per_second": 577.2779468863099}
+{"event": "measure_queries", "signals": 100000, "write_seconds": 152.24084646301344, "signals_per_second": 591.1685470158319}
+{"event": "search_exact_regex", "signals": 100000, "seconds": 4.426539990003221, "matches": 1}
+{"event": "search_12_regex", "signals": 100000, "seconds": 4.430112697998993, "matches": 12}
+{"event": "search_all", "signals": 100000, "seconds": 4.493316915933974, "matches": 100000}
+{"event": "write_progress", "signals": 104352, "target": 1000000, "stage_seconds": 15.888314889045432, "signals_per_second": 273.9119932095875}
+{"event": "write_progress", "signals": 112544, "target": 1000000, "stage_seconds": 30.09258648008108, "signals_per_second": 416.84685390214423}
+{"event": "write_progress", "signals": 120736, "target": 1000000, "stage_seconds": 44.6350865860004, "signals_per_second": 464.5672627977775}
+{"event": "write_progress", "signals": 128928, "target": 1000000, "stage_seconds": 60.395046059042215, "signals_per_second": 478.9796827329178}
+{"event": "write_progress", "signals": 137120, "target": 1000000, "stage_seconds": 74.20889990404248, "signals_per_second": 500.2095442460253}
+{"event": "write_progress", "signals": 145312, "target": 1000000, "stage_seconds": 87.95359872304834, "signals_per_second": 515.1807391381467}
+{"event": "write_progress", "signals": 153504, "target": 1000000, "stage_seconds": 102.24273269402329, "signals_per_second": 523.3036969005782}
+{"event": "write_progress", "signals": 161696, "target": 1000000, "stage_seconds": 115.95224881009199, "signals_per_second": 532.0810991863251}
+{"event": "write_progress", "signals": 169888, "target": 1000000, "stage_seconds": 130.02928469702601, "signals_per_second": 537.4789237889152}
+{"event": "write_progress", "signals": 178080, "target": 1000000, "stage_seconds": 143.88494122610427, "signals_per_second": 542.655814671413}
+{"event": "write_progress", "signals": 186272, "target": 1000000, "stage_seconds": 157.85764791700058, "signals_per_second": 546.5177084442602}
+{"event": "write_progress", "signals": 194464, "target": 1000000, "stage_seconds": 171.6020016410621, "signals_per_second": 550.4830893382541}
+{"event": "write_progress", "signals": 202656, "target": 1000000, "stage_seconds": 185.37058568000793, "signals_per_second": 553.7879681580537}
+{"event": "write_progress", "signals": 210848, "target": 1000000, "stage_seconds": 199.29285547602922, "signals_per_second": 556.2065922294576}
+{"event": "write_progress", "signals": 219040, "target": 1000000, "stage_seconds": 213.5404346450232, "signals_per_second": 557.4588259965142}
+{"event": "write_progress", "signals": 227232, "target": 1000000, "stage_seconds": 227.71631581999827, "signals_per_second": 558.730276053528}
+{"event": "write_progress", "signals": 235424, "target": 1000000, "stage_seconds": 241.50301912100986, "signals_per_second": 560.7548944642515}
+{"event": "write_progress", "signals": 243616, "target": 1000000, "stage_seconds": 255.3030708670849, "signals_per_second": 562.5314239747979}
+{"event": "write_progress", "signals": 251808, "target": 1000000, "stage_seconds": 269.15357371000573, "signals_per_second": 564.0200050383228}
+{"event": "write_progress", "signals": 260000, "target": 1000000, "stage_seconds": 282.90932297706604, "signals_per_second": 565.5522353109952}
+{"event": "write_progress", "signals": 264096, "target": 1000000, "stage_seconds": 292.96541403606534, "signals_per_second": 560.120724625191}
+{"event": "write_progress", "signals": 272288, "target": 1000000, "stage_seconds": 307.1265981240431, "signals_per_second": 560.9673699782129}
+{"event": "write_progress", "signals": 280480, "target": 1000000, "stage_seconds": 321.81347804609686, "signals_per_second": 560.8217564279513}
+{"event": "write_progress", "signals": 288672, "target": 1000000, "stage_seconds": 335.8660537470132, "signals_per_second": 561.7477500185677}
+{"event": "write_progress", "signals": 296864, "target": 1000000, "stage_seconds": 349.7344607380219, "signals_per_second": 562.8956311155919}
+{"event": "write_progress", "signals": 305056, "target": 1000000, "stage_seconds": 365.774113806081, "signals_per_second": 560.6082887230029}
+{"event": "write_progress", "signals": 313248, "target": 1000000, "stage_seconds": 379.86823630006984, "signals_per_second": 561.3736017442341}
+{"event": "write_progress", "signals": 321440, "target": 1000000, "stage_seconds": 395.4399122300092, "signals_per_second": 559.9839397880468}
+{"event": "write_progress", "signals": 329632, "target": 1000000, "stage_seconds": 409.5482330090599, "signals_per_second": 560.6958631290692}
+{"event": "write_progress", "signals": 337824, "target": 1000000, "stage_seconds": 423.72546113003045, "signals_per_second": 561.2690806111789}
+{"event": "write_progress", "signals": 346016, "target": 1000000, "stage_seconds": 439.47462791309226, "signals_per_second": 559.7956841518745}
+{"event": "write_progress", "signals": 354208, "target": 1000000, "stage_seconds": 454.1257887320826, "signals_per_second": 559.7744200120142}
+{"event": "write_progress", "signals": 362400, "target": 1000000, "stage_seconds": 470.65220461203717, "signals_per_second": 557.5242130572801}
+{"event": "write_progress", "signals": 370592, "target": 1000000, "stage_seconds": 484.7246416860726, "signals_per_second": 558.2385889414849}
+{"event": "write_progress", "signals": 378784, "target": 1000000, "stage_seconds": 501.41010263201315, "signals_per_second": 555.9999659691753}
+{"event": "write_progress", "signals": 386976, "target": 1000000, "stage_seconds": 515.9891503790859, "signals_per_second": 556.1667329422819}
+{"event": "write_progress", "signals": 395168, "target": 1000000, "stage_seconds": 530.5787057200214, "signals_per_second": 556.313317549076}
+{"event": "write_progress", "signals": 403360, "target": 1000000, "stage_seconds": 546.697147468105, "signals_per_second": 554.8958896254318}
+{"event": "write_progress", "signals": 411552, "target": 1000000, "stage_seconds": 560.8536843190668, "signals_per_second": 555.4960388256264}
+{"event": "write_progress", "signals": 419744, "target": 1000000, "stage_seconds": 576.8255981199909, "signals_per_second": 554.316592471139}
+{"event": "write_progress", "signals": 427936, "target": 1000000, "stage_seconds": 591.0517190929968, "signals_per_second": 554.8346945056464}
+{"event": "write_progress", "signals": 436128, "target": 1000000, "stage_seconds": 605.2503584920196, "signals_per_second": 555.3536570180023}
+{"event": "write_progress", "signals": 444320, "target": 1000000, "stage_seconds": 620.8728080909932, "signals_per_second": 554.5741342074326}
+{"event": "write_progress", "signals": 452512, "target": 1000000, "stage_seconds": 635.3352992880391, "signals_per_second": 554.8440333710834}
+{"event": "write_progress", "signals": 460704, "target": 1000000, "stage_seconds": 651.3589850370772, "signals_per_second": 553.7714352393061}
+{"event": "write_progress", "signals": 468896, "target": 1000000, "stage_seconds": 665.3852221950656, "signals_per_second": 554.4096678057177}
+{"event": "write_progress", "signals": 477088, "target": 1000000, "stage_seconds": 680.0928589890245, "signals_per_second": 554.4654601440029}
+{"event": "write_progress", "signals": 485280, "target": 1000000, "stage_seconds": 695.7951808630023, "signals_per_second": 553.72616913232}
+{"event": "write_progress", "signals": 493472, "target": 1000000, "stage_seconds": 710.0878522350686, "signals_per_second": 554.1173514819466}
+{"event": "write_progress", "signals": 501664, "target": 1000000, "stage_seconds": 725.866712790099, "signals_per_second": 553.3577899668068}
+{"event": "write_progress", "signals": 509856, "target": 1000000, "stage_seconds": 741.781741503044, "signals_per_second": 552.5291026569681}
+{"event": "write_progress", "signals": 518048, "target": 1000000, "stage_seconds": 756.4250653270865, "signals_per_second": 552.6628071469729}
+{"event": "write_progress", "signals": 526240, "target": 1000000, "stage_seconds": 772.2458991090534, "signals_per_second": 551.9485444879107}
+{"event": "write_progress", "signals": 534432, "target": 1000000, "stage_seconds": 786.7181589020183, "signals_per_second": 552.2079223470756}
+{"event": "write_progress", "signals": 542624, "target": 1000000, "stage_seconds": 803.1244141299976, "signals_per_second": 551.1275615739839}
+{"event": "write_progress", "signals": 550816, "target": 1000000, "stage_seconds": 817.6855720920721, "signals_per_second": 551.33172870664}
+{"event": "write_progress", "signals": 559008, "target": 1000000, "stage_seconds": 834.661084665102, "signals_per_second": 549.9333902504532}
+{"event": "write_progress", "signals": 567200, "target": 1000000, "stage_seconds": 848.7082532000495, "signals_per_second": 550.4836299616802}
+{"event": "write_progress", "signals": 575392, "target": 1000000, "stage_seconds": 862.7974157020217, "signals_per_second": 550.9891329625665}
+{"event": "write_progress", "signals": 583584, "target": 1000000, "stage_seconds": 879.1947394770104, "signals_per_second": 550.0305885447634}
+{"event": "write_progress", "signals": 591776, "target": 1000000, "stage_seconds": 894.0096205150476, "signals_per_second": 550.079091673178}
+{"event": "write_progress", "signals": 599968, "target": 1000000, "stage_seconds": 910.8882621939993, "signals_per_second": 548.8796164699263}
+{"event": "write_progress", "signals": 608160, "target": 1000000, "stage_seconds": 925.8390690630767, "signals_per_second": 548.8642864404542}
+{"event": "write_progress", "signals": 616352, "target": 1000000, "stage_seconds": 941.9628736641025, "signals_per_second": 548.1659781255111}
+{"event": "write_progress", "signals": 624544, "target": 1000000, "stage_seconds": 956.4247356710257, "signals_per_second": 548.4425281326303}
+{"event": "write_progress", "signals": 632736, "target": 1000000, "stage_seconds": 971.4512974440586, "signals_per_second": 548.3918765682413}
+{"event": "write_progress", "signals": 640928, "target": 1000000, "stage_seconds": 986.9535367570352, "signals_per_second": 548.078485819504}
+{"event": "write_progress", "signals": 649120, "target": 1000000, "stage_seconds": 1002.2637297370238, "signals_per_second": 547.8797483214117}
+{"event": "write_progress", "signals": 657312, "target": 1000000, "stage_seconds": 1018.502705432009, "signals_per_second": 547.187549947263}
+{"event": "write_progress", "signals": 665504, "target": 1000000, "stage_seconds": 1034.2607569760876, "signals_per_second": 546.7712046364287}
+{"event": "write_progress", "signals": 673440, "target": 1000000, "stage_seconds": 1044.2884667910403, "signals_per_second": 549.1203036667683}
+{"event": "write_progress", "signals": 677792, "target": 1000000, "stage_seconds": 1058.2410080730915, "signals_per_second": 545.9928273353139}
+{"event": "write_progress", "signals": 685984, "target": 1000000, "stage_seconds": 1072.9335072200047, "signals_per_second": 546.1512722426742}
+{"event": "write_progress", "signals": 694176, "target": 1000000, "stage_seconds": 1089.3719530280214, "signals_per_second": 545.4298675015698}
+{"event": "write_progress", "signals": 702368, "target": 1000000, "stage_seconds": 1104.6521673070965, "signals_per_second": 545.3010620242959}
+{"event": "write_progress", "signals": 710560, "target": 1000000, "stage_seconds": 1120.5893086340511, "signals_per_second": 544.8561710304426}
+{"event": "write_progress", "signals": 718752, "target": 1000000, "stage_seconds": 1135.6935641550226, "signals_per_second": 544.823022273938}
+{"event": "write_progress", "signals": 726944, "target": 1000000, "stage_seconds": 1151.7612157230033, "signals_per_second": 544.3350509128265}
+{"event": "write_progress", "signals": 735136, "target": 1000000, "stage_seconds": 1166.4005886670202, "signals_per_second": 544.5264741557124}
+{"event": "write_progress", "signals": 743328, "target": 1000000, "stage_seconds": 1180.5875371540897, "signals_per_second": 544.9218967284703}
+{"event": "write_progress", "signals": 751520, "target": 1000000, "stage_seconds": 1196.8446331630694, "signals_per_second": 544.3647253345964}
+{"event": "write_progress", "signals": 759712, "target": 1000000, "stage_seconds": 1211.8678051220486, "signals_per_second": 544.3762077115001}
+{"event": "write_progress", "signals": 767904, "target": 1000000, "stage_seconds": 1229.0159708140418, "signals_per_second": 543.4461519304848}
+{"event": "write_progress", "signals": 776096, "target": 1000000, "stage_seconds": 1244.3871141680283, "signals_per_second": 543.3164586022123}
+{"event": "write_progress", "signals": 784288, "target": 1000000, "stage_seconds": 1260.3026269080583, "signals_per_second": 542.9553072334588}
+{"event": "write_progress", "signals": 792480, "target": 1000000, "stage_seconds": 1274.881849867059, "signals_per_second": 543.1719026137283}
+{"event": "write_progress", "signals": 800672, "target": 1000000, "stage_seconds": 1291.26849111903, "signals_per_second": 542.6230135862671}
+{"event": "write_progress", "signals": 808864, "target": 1000000, "stage_seconds": 1305.513640454039, "signals_per_second": 542.9770919539893}
+{"event": "write_progress", "signals": 817056, "target": 1000000, "stage_seconds": 1320.2471513330238, "signals_per_second": 543.1225504073269}
+{"event": "write_progress", "signals": 825248, "target": 1000000, "stage_seconds": 1336.623488347046, "signals_per_second": 542.5970786259995}
+{"event": "write_progress", "signals": 833440, "target": 1000000, "stage_seconds": 1351.3545400240691, "signals_per_second": 542.7443193308372}
+{"event": "write_progress", "signals": 841632, "target": 1000000, "stage_seconds": 1367.438512406079, "signals_per_second": 542.3512598713195}
+{"event": "write_progress", "signals": 849824, "target": 1000000, "stage_seconds": 1382.0737272769911, "signals_per_second": 542.5354561057527}
+{"event": "write_progress", "signals": 858016, "target": 1000000, "stage_seconds": 1398.152330268058, "signals_per_second": 542.1555173853416}
+{"event": "write_progress", "signals": 866208, "target": 1000000, "stage_seconds": 1412.6625447970582, "signals_per_second": 542.3857260334404}
+{"event": "write_progress", "signals": 874400, "target": 1000000, "stage_seconds": 1426.856324777007, "signals_per_second": 542.7315887049982}
+{"event": "write_progress", "signals": 882592, "target": 1000000, "stage_seconds": 1449.2229946340667, "signals_per_second": 540.007992488145}
+{"event": "write_progress", "signals": 886688, "target": 1000000, "stage_seconds": 1486.7888323160587, "signals_per_second": 529.1188519182847}
+{"event": "write_progress", "signals": 890784, "target": 1000000, "stage_seconds": 1522.2718329930212, "signals_per_second": 519.4762084280287}
+{"event": "write_progress", "signals": 894880, "target": 1000000, "stage_seconds": 1557.9989020500798, "signals_per_second": 510.19291409901757}
+{"event": "write_progress", "signals": 898976, "target": 1000000, "stage_seconds": 1593.5991387660615, "signals_per_second": 501.36573280194824}
+{"event": "write_progress", "signals": 903072, "target": 1000000, "stage_seconds": 1629.686939256033, "signals_per_second": 492.77685220120236}
+{"event": "write_progress", "signals": 907168, "target": 1000000, "stage_seconds": 1665.2854483301053, "signals_per_second": 484.7024879785037}
+{"event": "write_progress", "signals": 911264, "target": 1000000, "stage_seconds": 1703.4594925040146, "signals_per_second": 476.2449612508693}
+{"event": "write_progress", "signals": 915360, "target": 1000000, "stage_seconds": 1739.4987208490493, "signals_per_second": 468.73273905141065}
+{"event": "write_progress", "signals": 919456, "target": 1000000, "stage_seconds": 1776.6584752030903, "signals_per_second": 461.2343967268823}
+{"event": "write_progress", "signals": 923552, "target": 1000000, "stage_seconds": 1812.1652244080324, "signals_per_second": 454.457457249255}
+{"event": "write_progress", "signals": 927648, "target": 1000000, "stage_seconds": 1848.5035681340378, "signals_per_second": 447.7394657319839}
+{"event": "write_progress", "signals": 931744, "target": 1000000, "stage_seconds": 1887.0405864330241, "signals_per_second": 440.7663544599234}
+{"event": "write_progress", "signals": 935840, "target": 1000000, "stage_seconds": 1922.424393137102, "signals_per_second": 434.7843290918907}
+{"event": "write_progress", "signals": 939936, "target": 1000000, "stage_seconds": 1958.081667926046, "signals_per_second": 428.95861483123963}
+{"event": "write_progress", "signals": 944032, "target": 1000000, "stage_seconds": 1993.9005674420623, "signals_per_second": 423.30696614565534}
+{"event": "write_progress", "signals": 948128, "target": 1000000, "stage_seconds": 2029.7738029190805, "signals_per_second": 417.8436034499415}
+{"event": "write_progress", "signals": 952224, "target": 1000000, "stage_seconds": 2066.0909586650087, "signals_per_second": 412.4813558792489}
+{"event": "write_progress", "signals": 956320, "target": 1000000, "stage_seconds": 2101.4554515630007, "signals_per_second": 407.4890092783525}
+{"event": "write_progress", "signals": 960416, "target": 1000000, "stage_seconds": 2137.3674374850234, "signals_per_second": 402.5587668783922}
+{"event": "write_progress", "signals": 964512, "target": 1000000, "stage_seconds": 2172.987058483064, "signals_per_second": 397.8449833030783}
+{"event": "write_progress", "signals": 968608, "target": 1000000, "stage_seconds": 2208.406399804051, "signals_per_second": 393.3189109020289}
+{"event": "write_progress", "signals": 972704, "target": 1000000, "stage_seconds": 2243.9528026850894, "signals_per_second": 388.9137057409282}
+{"event": "write_progress", "signals": 976800, "target": 1000000, "stage_seconds": 2279.6088717200328, "signals_per_second": 384.62738537178456}
+{"event": "write_progress", "signals": 980896, "target": 1000000, "stage_seconds": 2316.718786047073, "signals_per_second": 380.2343233479099}
+{"event": "write_progress", "signals": 984992, "target": 1000000, "stage_seconds": 2352.7105913599953, "signals_per_second": 376.15846302983925}
+{"event": "write_progress", "signals": 989088, "target": 1000000, "stage_seconds": 2388.396192872082, "signals_per_second": 372.2531473854254}
+{"event": "write_progress", "signals": 993184, "target": 1000000, "stage_seconds": 2423.8111595730297, "signals_per_second": 368.50395562884535}
+{"event": "write_progress", "signals": 997184, "target": 1000000, "stage_seconds": 2474.1828028830932, "signals_per_second": 362.6183154108652}
+{"event": "write_progress", "signals": 997440, "target": 1000000, "stage_seconds": 2485.0519082720857, "signals_per_second": 361.13531351705683}
+{"event": "measure_queries", "signals": 1000000, "write_seconds": 2487.3422450460494, "signals_per_second": 361.8319922770973}
+{"event": "search_exact_regex", "signals": 1000000, "seconds": 232.53399385593366, "matches": 1}
+{"event": "search_12_regex", "signals": 1000000, "seconds": 42.399365875986405, "matches": 12}
+{"event": "search_all", "signals": 1000000, "seconds": 40.74628818000201, "matches": 1000000}
+{"event": "retention_enabled", "enabled": true, "directory": "/tmp/pagestore-many-signals-_nud5zw4/store"}
+{"event": "scan_storage", "signals": 1000000}
+{"event": "complete", "report": "benchmarks/results/million-signals-ext4-2026-10-09.json", "seconds": 3490.8471536580473}

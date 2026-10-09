@@ -1,0 +1,7 @@
+{
+  "baseline_pid": 3993177,
+  "complete": true,
+  "note": "Baseline writes and query measurements finish before the cache experiments. The parent is paused during the final storage audit; pause time is excluded from the adjusted audit time.",
+  "started_utc": "2026-10-09T11:58:23.812042+00:00",
+  "baseline_pause_seconds": 149.74341654102318
+}

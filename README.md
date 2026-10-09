@@ -57,6 +57,23 @@ record across the entire selected interval; `max_count` limits the final result.
 `get("regexp")` searches names using `re.search`; `get(["exact/name"])` selects
 exact names. Unknown exact names raise `SignalNotFoundError`.
 
+Search loads a compact, checksummed name catalog on first use and keeps names in
+memory. Every search checks for other workers' newly created signals; measurement
+updates need no shared catalog lock. DB opening and exact-name reads stay lazy.
+Only first-time signal creation pays the catalog maintenance cost.
+
+For a store created with the original 0.0.0 implementation, build the catalog once:
+
+```python
+with DB("./measurements") as db:
+    print(db.rebuild_catalog())  # signal count; reads HEADs/manifests, not data pages
+```
+
+The first writable search also builds a missing catalog automatically. Read-only
+clients use the older scan until it exists. Use catalog-aware writers thereafter;
+after adding signals with older code, rebuild before relying on search. The same
+method repairs a corrupt name catalog. Exact-name data reads remain independent.
+
 Numeric timestamps remain numeric measurement axes. Integer timestamps are int64;
 floating timestamps are float64. A signal's timestamp kind is fixed by its first
 nonempty write, and subsequent conversions must be exact.
@@ -127,6 +144,9 @@ reports successful signals if a later signal fails. There is no multi-signal
 transaction. A `RecoveryIncompleteError` cause means HEAD is committed but the
 recovery copies need completion; call `db.repair_recovery(name)` without replaying
 the upsert. An unknown publication outcome carries its commit ID for reconciliation.
+A `CatalogIncompleteError` cause means the data commit and recovery copies are
+durable, but name-catalog finalization failed. Search still resolves its saved
+creation intent; run `db.rebuild_catalog()` without replaying the data.
 
 ## Records and ownership
 
@@ -168,8 +188,9 @@ is unnecessary. Recovery can reconstruct damaged metadata from a surviving copy
 when the reconstructed page matches its expected hash. Missing/corrupt measurement
 payloads require another copy or backup. The report identifies incomplete recovery,
 repaired pages, and unconfirmed orphan pages that were excluded from live data.
-Use `db.checkpoint(name)` to create a fresh recovery checkpoint. Obsolete files
-are currently retained; automatic reclamation is not implemented.
+Use `db.checkpoint(name)` to create a fresh recovery checkpoint. Obsolete measurement,
+index, manifest, and recovery files are retained; their automatic reclamation is
+not implemented. Replaced, derived name-catalog shards are reclaimed automatically.
 
 ## Filesystems and current scope
 
@@ -190,6 +211,21 @@ Run `python -m pytest -q` for the test suite. Run
 `PYTHONPATH=. python examples/benchmark.py --workers 4 --records 1048576` for a synthetic
 fresh-signal/direct-write comparison on the chosen filesystem. It does not measure
 NXCALS service latency or establish a network time-to-first-data guarantee.
+
+To stress catalog size, create one million signals with 32 records each:
+
+```sh
+PYTHONPATH=. python examples/benchmark_many_signals.py --directory /tmp \
+    --signals 1000000 --records 32 --workers 16 \
+    --output benchmarks/results/million-signals.json
+```
+
+This measures database opening, name searches, and extraction of 12 signals at
+increasing catalog sizes, with ordinary durable writes. It checks free bytes and
+inodes before scaling, reports file and directory overhead, and removes the
+temporary database afterward. Use `--keep` to retain it. See the
+[benchmark notes](https://github.com/rdemaria/pagestore/blob/main/benchmarks/README.md)
+for methodology and results.
 
 ## Legacy API
 

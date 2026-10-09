@@ -1,7 +1,7 @@
 """The PageStore database API and filesystem commit protocol."""
 
 from collections.abc import Mapping
-from contextlib import AbstractContextManager
+from contextlib import AbstractContextManager, nullcontext
 from dataclasses import replace
 import re
 from uuid import uuid4
@@ -43,6 +43,7 @@ from .model import (
 )
 from .page_format import data_plan, read_page, recovery_plan
 from .page_index import PageIndex
+from .name_catalog import NameCatalog
 from .timestamps import (
     KINDS,
     bound,
@@ -119,6 +120,7 @@ class DB(AbstractContextManager):
                     self._backend.publish("store.json", [envelope(self._config)])
         self._validate_config(requested)
         self._backend.bind_coordination(self._config["coordination"])
+        self._name_catalog = NameCatalog(self)
         if mode != "r":
             # Existing workers need no database-wide writer lock. Root recovery
             # repair is idempotent: competing repairs publish identical bytes.
@@ -178,6 +180,7 @@ class DB(AbstractContextManager):
 
     def close(self):
         self._closed = True
+        self._name_catalog = None
 
     def __exit__(self, *exc):
         self.close()
@@ -208,12 +211,8 @@ class DB(AbstractContextManager):
             manifest["root"],
         )
 
-    def search(self, regexp=""):
-        self._open()
-        try:
-            pattern = re.compile(regexp)
-        except (re.error, TypeError) as exc:
-            raise ValueError("Invalid signal regular expression") from exc
+    def _scan_signal_names(self):
+        """Authoritative, expensive enumeration for rebuilds and verification."""
         names = []
         for path in self._backend.path("signals").glob("*/*/HEAD.json"):
             head = unpack(path.read_bytes())
@@ -222,11 +221,39 @@ class DB(AbstractContextManager):
             if (
                 path.parent != self._backend.path(signal_prefix(name))
                 or manifest["database_id"] != self._config["database_id"]
+                or manifest["signal_id"] != signal_id(name)
+                or manifest["commit_id"] != head["commit_id"]
             ):
                 raise CorruptionError("Catalog signal identity mismatch")
-            if pattern.search(name):
-                names.append(name)
+            names.append(name)
         return sorted(names)
+
+    def rebuild_catalog(self):
+        """Rebuild name discovery from signal HEADs; return the signal count.
+
+        Reads metadata only. Also clears interrupted creation intents and retired
+        name shards. Other catalog-aware writers may remain active. Required after
+        writes with older versions that do not maintain the name catalog.
+        """
+        self._open(write=True)
+        return self._name_catalog.rebuild()
+
+    def search(self, regexp=""):
+        """Search sorted names, loading the compact catalog on first use.
+
+        Each call checks for other workers' creations. Existing measurement writes
+        do not invalidate the name cache. Read-only older stores without a catalog
+        use a HEAD scan; a writable first search builds the catalog once.
+        """
+        self._open()
+        try:
+            pattern = re.compile(regexp)
+        except (re.error, TypeError) as exc:
+            raise ValueError("Invalid signal regular expression") from exc
+        names = self._name_catalog.names()
+        if regexp == "":
+            return list(names)
+        return [name for name in names if pattern.search(name)]
 
     def _select(self, selector):
         if selector is None:
@@ -598,6 +625,19 @@ class DB(AbstractContextManager):
         )
         head_key = signal_prefix(name) + "/HEAD.json"
         head = {"commit_id": commit_id, "manifest": ref}
+        registration = (
+            self._name_catalog.creating(name, commit_id)
+            if parent is None
+            else nullcontext()
+        )
+        with registration:
+            self._publish_commit(head_key, head, manifest, record)
+        return WriteResult(
+            manifest["generation"], inserted, replaced, root["count"], commit_id
+        )
+
+    def _publish_commit(self, head_key, head, manifest, record):
+        name, commit_id = manifest["signal_name"], manifest["commit_id"]
         try:
             self._backend.publish(head_key, [envelope(head)], replace=True)
         except Exception as exc:
@@ -615,9 +655,6 @@ class DB(AbstractContextManager):
             self._publish_recovery(manifest, record)
         except Exception as exc:
             raise RecoveryIncompleteError(name, commit_id) from exc
-        return WriteResult(
-            manifest["generation"], inserted, replaced, root["count"], commit_id
-        )
 
     def _write_pages(self, name, kind, batches, maximum, ordinal):
         prefix = signal_prefix(name)

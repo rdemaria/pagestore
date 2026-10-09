@@ -42,8 +42,9 @@ The following decisions guide the implementation:
   must reconstruct acknowledged database state without `store.json`, HEADs,
   manifests, or the original directory layout.
 - Give each bulk worker independent per-signal ownership; there is no global
-  writer lock or global catalog update for each batch. Serialize publication to
-  each signal independently. Readers must see a complete
+  writer lock or global catalog update for each batch of an existing signal.
+  New signal creation is rare and may pay for a shared discovery-catalog update.
+  Serialize publication to each signal independently. Readers must see a complete
   committed version while another client writes the same signal.
 - Publish immutable pages and manifests through one small, atomically updated
   pointer per signal. A write involving several signals commits each independently.
@@ -191,6 +192,7 @@ DB(url, *, mode="a", default_max_page_size=None, lock_timeout=30.0, timezone="ut
 db.close()
 db.backend_info -> BackendInfo
 db.search(regexp="") -> list[str]
+db.rebuild_catalog() -> int  # metadata-only rebuild; number of visible signals
 db.info(name) -> SignalInfo
 db.configure_signal(name, *, max_page_size) -> SignalInfo
 
@@ -343,10 +345,14 @@ storage is reported separately.
 
 There is no shared database file. Each signal has an immutable page-descriptor
 index, addressed by a small commit manifest. Only its `HEAD.json` pointer changes.
-Updating one signal never rewrites an index of all database signals.
+Updating an existing signal never rewrites an index of all database signals.
+Creating a new signal also maintains a compact, derived name catalog.
 
 ```text
 store.json                         # format, database UUID, page/coordination settings
+catalog/HEAD.json                  # checksummed shard references + creation intents
+catalog/LOCK.lock                  # local profile; LOCK.LOCK for mkdir coordination
+catalog/shards/ab/<uuid>.json       # sorted names, sharded by signal hash
 pages/recovery/store-<config-uuid>.0.pg
 pages/recovery/store-<config-uuid>.1.pg  # also preserve an empty store's configuration
 signals/
@@ -411,12 +417,44 @@ incremental recovery record or full checkpoint, plus root configuration.
 Reconstruction replays these committed records, not directory names, file
 modification times or upload order of otherwise unreferenced data pages.
 
-`search` lists signal HEAD keys and filters the embedded names. It need not load
-pages or full manifests. Cache decoded manifests by their immutable key/digest;
-refresh HEAD according to the backend's consistency contract. A future persisted
-name cache must be rebuildable and must not become a second source of truth.
-New-signal discovery inherits backend listing consistency; direct reads address a
-signal deterministically and do not depend on listing.
+`search` lazily loads a compact, persistent name catalog into memory. Up to 256
+immutable JSON shards hold sorted names, partitioned by the first byte of the
+signal-name hash. A checksummed `catalog/HEAD.json` contains their keys and SHA-256
+digests, the database identity, and pending creation names. Each search rereads
+this small HEAD; unchanged shards remain cached. Changed shards are loaded and
+the merged name list sorted. Regex searches scan that list in memory. An empty
+regex returns a copy of the sorted names. Opening a DB and exact-name measurement
+reads do not load this catalog or enumerate the namespace.
+
+First creation takes the signal lock, then the catalog lock. Before publishing
+the signal HEAD, durably add a creation intent to the catalog HEAD. Publish the
+signal commit and its paired recovery pages, then add the name to its shard and
+remove the intent in one catalog HEAD replacement. Readers resolve remaining
+intents against signal HEADs: committed creations remain visible after a crash;
+uncommitted creations are excluded. Catalog finalization failures after a durable
+signal commit raise `CatalogIncompleteError(committed=True)`. Existing-signal
+writes never acquire the catalog lock or invalidate the name cache.
+
+After durable catalog publication, retire replaced name shards. A reader whose
+captured shard has been removed retries against the newer catalog HEAD. If HEAD
+is unchanged, a missing shard is corruption. Persistent failure to read a stable
+catalog raises an explicit retry error rather than returning incomplete results.
+Cleanup failure may leave harmless unreferenced name shards.
+
+`rebuild_catalog()` scans signal HEADs/manifests, without reading measurement
+pages, and atomically replaces the derived catalog. It holds only the catalog
+lock; existing-signal writers can continue. It removes pending intents and old
+name shards. Corrupt caches require this explicit repair; direct-name data reads
+remain independent. Integrity checking enumerates authoritative signal HEADs and
+compares the name catalog, so a missing catalog entry cannot hide data from it.
+Page-only recovery rebuilds the name catalog from the reconstructed signal HEADs.
+
+Stores written by 0.0.0 without this catalog remain readable. Their first writable
+search or new-signal creation builds it once; read-only searches retain the old
+HEAD-scan fallback until a writable client builds it. All writers must use the
+catalog-aware implementation once the catalog exists. After an older writer adds
+signals, stop that writer and explicitly rebuild before relying on name search.
+The measurement/page format is unchanged; the catalog is never recovery authority.
 
 Use an immutable ordered tree of bounded descriptor blocks. Leaf nodes contain
 page descriptors sorted by first timestamp; internal nodes contain child keys,
@@ -1133,7 +1171,9 @@ default and selected larger per-signal limits.
   pre-existing signal size must not introduce a full-index scan/copy per group.
 - Measure checksum/statistics CPU time, sorting/conversion copies, queue memory,
   network/disk utilization, request count, sync/commit latency and lock waiting.
-  Independent-signal workers must not wait on a shared catalog writer lock.
+  Workers updating existing signals must not wait on a shared catalog writer
+  lock. Benchmark first-time creation separately: it deliberately pays for
+  durable, promptly visible name discovery.
 - If hashing, metadata round trips or a serialization loop limits throughput
   before network/disk does, optimize that measured stage without dropping
   integrity hashes or acknowledging writes before the required durability point.

@@ -47,6 +47,19 @@ class RecoveryIncompleteError(PageStoreError):
         )
 
 
+class CatalogIncompleteError(PageStoreError):
+    committed = True
+
+    def __init__(self, signal, commit_id):
+        self.signal = signal
+        self.commit_id = commit_id
+        super().__init__(
+            f"{signal!r}: commit {commit_id} is visible and recoverable; "
+            "name catalog finalization failed (search uses the creation intent); "
+            "run rebuild_catalog() without replaying data"
+        )
+
+
 class StoreError(PageStoreError):
     def __init__(self, results, failed_name, cause):
         self.results = dict(results)

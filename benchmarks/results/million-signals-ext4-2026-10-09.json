@@ -1,0 +1,496 @@
+{
+  "started_utc": "2026-10-09T11:08:25.094162+00:00",
+  "environment": {
+    "python": "3.14.6",
+    "numpy": "2.4.6",
+    "pagestore": "0.0.0",
+    "platform": "Linux-6.8.0-142-generic-x86_64-with-glibc2.39",
+    "logical_cpus": 32,
+    "source_revision": "1efc8964d5e8eb3dff21ddcced587998720971f0",
+    "package_source_sha256": "324ef44ffbd881e6dcdb4ac5c0a09933aad926bda854ec40a60c6bdbd654f8bf",
+    "benchmark_sha256": "5efe89edd078d5922b53607413ed53c3f07842406a1bb4dba27be3b247532ce1"
+  },
+  "parameters": {
+    "directory": "/tmp",
+    "signals": 1000000,
+    "records": 32,
+    "workers": 16,
+    "chunk_size": 256,
+    "samples": 100,
+    "milestones": "1000,10000,100000,1000000",
+    "output": "benchmarks/results/million-signals-ext4-2026-10-09.json",
+    "keep": true
+  },
+  "directory": "/tmp/pagestore-many-signals-_nud5zw4/store",
+  "milestones": [
+    {
+      "signals": 1000,
+      "new_signals": 1000,
+      "io": {
+        "written_bytes": 11412340,
+        "read_bytes": 2348560,
+        "publications": 6000
+      },
+      "worker_peak_rss_bytes": {
+        "38": 39845888,
+        "47": 40108032,
+        "40": 39845888,
+        "41": 39321600
+      },
+      "worker_cpu_seconds": 2.5850880609999995,
+      "write_seconds": 6.183613129076548,
+      "signals_per_second": 161.7177496596296,
+      "cumulative_write_seconds": 6.183613129076548,
+      "space_after_write": {
+        "bytes": 397730832384,
+        "inodes": 32209510
+      },
+      "queries": {
+        "cache_state": "OS cache retained; first pass follows ingestion",
+        "open_r": {
+          "samples": 100,
+          "total_seconds": 0.0200971009908244,
+          "mean_ms": 0.200971009908244,
+          "p50_ms": 0.19323150627315044,
+          "p95_ms": 0.22131795412860808,
+          "p99_ms": 0.26364206103608184,
+          "max_ms": 0.5977789405733347
+        },
+        "open_a": {
+          "samples": 100,
+          "total_seconds": 0.03086090204305947,
+          "mean_ms": 0.3086090204305947,
+          "p50_ms": 0.30065298778936267,
+          "p95_ms": 0.326936220517382,
+          "p99_ms": 0.3780773794278521,
+          "max_ms": 0.732140033505857
+        },
+        "exact_read_first_pass": {
+          "samples": 100,
+          "total_seconds": 0.02312529820483178,
+          "mean_ms": 0.2312529820483178,
+          "p50_ms": 0.16367703210562468,
+          "p95_ms": 0.23932953481562433,
+          "p99_ms": 0.7354457012843597,
+          "max_ms": 5.7075939839705825
+        },
+        "exact_read_repeat": {
+          "samples": 100,
+          "total_seconds": 0.015966339502483606,
+          "mean_ms": 0.15966339502483606,
+          "p50_ms": 0.15295599587261677,
+          "p95_ms": 0.1658337307162583,
+          "p99_ms": 0.21465009544044972,
+          "max_ms": 0.6747129373252392
+        },
+        "extract_12_signals": {
+          "samples": 100,
+          "total_seconds": 0.24489242455456406,
+          "mean_ms": 2.4489242455456406,
+          "p50_ms": 2.340992505196482,
+          "p95_ms": 2.9855709348339587,
+          "p99_ms": 3.0611996387597173,
+          "max_ms": 3.075025975704193,
+          "signals_per_extraction": 12,
+          "records_per_extraction": 384
+        },
+        "search_exact_regex": {
+          "seconds": 0.04703801206778735,
+          "matches": 1
+        },
+        "search_12_regex": {
+          "seconds": 0.04650043591391295,
+          "matches": 12
+        },
+        "search_all": {
+          "seconds": 0.04624923598021269,
+          "matches": 1000
+        },
+        "peak_rss_bytes": 41418752
+      }
+    },
+    {
+      "signals": 10000,
+      "new_signals": 9000,
+      "io": {
+        "written_bytes": 102771000,
+        "read_bytes": 21177000,
+        "publications": 54000
+      },
+      "worker_peak_rss_bytes": {
+        "44": 40108032,
+        "41": 39321600,
+        "47": 40108032,
+        "38": 39845888,
+        "46": 39845888,
+        "42": 39845888,
+        "49": 39845888,
+        "45": 39583744,
+        "50": 40108032,
+        "52": 39321600,
+        "48": 40108032,
+        "53": 39583744,
+        "39": 39321600,
+        "43": 39845888,
+        "51": 39845888,
+        "40": 39845888
+      },
+      "worker_cpu_seconds": 20.69009655,
+      "write_seconds": 19.458944126963615,
+      "signals_per_second": 462.5122484178881,
+      "cumulative_write_seconds": 25.642557256040163,
+      "space_after_write": {
+        "bytes": 397325307904,
+        "inodes": 32101504
+      },
+      "queries": {
+        "cache_state": "OS cache retained; first pass follows ingestion",
+        "open_r": {
+          "samples": 100,
+          "total_seconds": 0.021082884981296957,
+          "mean_ms": 0.21082884981296957,
+          "p50_ms": 0.19922805950045586,
+          "p95_ms": 0.2234889368992298,
+          "p99_ms": 0.3904955950565656,
+          "max_ms": 0.7797289872542024
+        },
+        "open_a": {
+          "samples": 100,
+          "total_seconds": 0.03132307389751077,
+          "mean_ms": 0.31323073897510767,
+          "p50_ms": 0.3056270070374012,
+          "p95_ms": 0.33893298241309816,
+          "p99_ms": 0.4106291919015359,
+          "max_ms": 0.6248799618333578
+        },
+        "exact_read_first_pass": {
+          "samples": 100,
+          "total_seconds": 0.019881367799825966,
+          "mean_ms": 0.19881367799825966,
+          "p50_ms": 0.15790603356435895,
+          "p95_ms": 0.190066231880337,
+          "p99_ms": 0.6723372568376502,
+          "max_ms": 3.372984007000923
+        },
+        "exact_read_repeat": {
+          "samples": 100,
+          "total_seconds": 0.015461625414900482,
+          "mean_ms": 0.15461625414900482,
+          "p50_ms": 0.14706002548336983,
+          "p95_ms": 0.1777885074261576,
+          "p99_ms": 0.1980696932878368,
+          "max_ms": 0.6383949657902122
+        },
+        "extract_12_signals": {
+          "samples": 100,
+          "total_seconds": 0.23068568750750273,
+          "mean_ms": 2.3068568750750273,
+          "p50_ms": 2.21351400250569,
+          "p95_ms": 2.7626741619315,
+          "p99_ms": 2.7707017818465833,
+          "max_ms": 2.7940410654991865,
+          "signals_per_extraction": 12,
+          "records_per_extraction": 384
+        },
+        "search_exact_regex": {
+          "seconds": 0.43254633503966033,
+          "matches": 1
+        },
+        "search_12_regex": {
+          "seconds": 0.42779306799639016,
+          "matches": 12
+        },
+        "search_all": {
+          "seconds": 0.4336427479283884,
+          "matches": 10000
+        },
+        "peak_rss_bytes": 42205184
+      }
+    },
+    {
+      "signals": 100000,
+      "new_signals": 90000,
+      "io": {
+        "written_bytes": 1028250000,
+        "read_bytes": 212130000,
+        "publications": 540000
+      },
+      "worker_peak_rss_bytes": {
+        "48": 40108032,
+        "41": 39583744,
+        "38": 39845888,
+        "52": 39321600,
+        "53": 39583744,
+        "40": 39845888,
+        "43": 39845888,
+        "42": 40108032,
+        "47": 40370176,
+        "44": 40108032,
+        "50": 40108032,
+        "51": 40108032,
+        "46": 39845888,
+        "45": 39583744,
+        "49": 39845888,
+        "39": 39321600
+      },
+      "worker_cpu_seconds": 222.20588791799997,
+      "write_seconds": 152.24084646301344,
+      "signals_per_second": 591.1685470158319,
+      "cumulative_write_seconds": 177.8834037190536,
+      "space_after_write": {
+        "bytes": 393259184128,
+        "inodes": 31021506
+      },
+      "queries": {
+        "cache_state": "OS cache retained; first pass follows ingestion",
+        "open_r": {
+          "samples": 100,
+          "total_seconds": 0.0204017668729648,
+          "mean_ms": 0.204017668729648,
+          "p50_ms": 0.19379297737032175,
+          "p95_ms": 0.25701310369186103,
+          "p99_ms": 0.3525044315028949,
+          "max_ms": 0.6068869261071086
+        },
+        "open_a": {
+          "samples": 100,
+          "total_seconds": 0.030376920360140502,
+          "mean_ms": 0.303769203601405,
+          "p50_ms": 0.2962740254588425,
+          "p95_ms": 0.3214818192645907,
+          "p99_ms": 0.37758343270980016,
+          "max_ms": 0.7521380903199315
+        },
+        "exact_read_first_pass": {
+          "samples": 100,
+          "total_seconds": 0.021062728599645197,
+          "mean_ms": 0.21062728599645197,
+          "p50_ms": 0.1640574773773551,
+          "p95_ms": 0.2176543290261179,
+          "p99_ms": 0.7260876928921949,
+          "max_ms": 3.804662963375449
+        },
+        "exact_read_repeat": {
+          "samples": 100,
+          "total_seconds": 0.01570070011075586,
+          "mean_ms": 0.1570070011075586,
+          "p50_ms": 0.15033100498840213,
+          "p95_ms": 0.167723186314106,
+          "p99_ms": 0.2232363831717542,
+          "max_ms": 0.6306599825620651
+        },
+        "extract_12_signals": {
+          "samples": 100,
+          "total_seconds": 0.24765327363274992,
+          "mean_ms": 2.476532736327499,
+          "p50_ms": 2.374936011619866,
+          "p95_ms": 2.992709696991369,
+          "p99_ms": 3.0245509999804203,
+          "max_ms": 3.1185989500954747,
+          "signals_per_extraction": 12,
+          "records_per_extraction": 384
+        },
+        "search_exact_regex": {
+          "seconds": 4.426539990003221,
+          "matches": 1
+        },
+        "search_12_regex": {
+          "seconds": 4.430112697998993,
+          "matches": 12
+        },
+        "search_all": {
+          "seconds": 4.493316915933974,
+          "matches": 100000
+        },
+        "peak_rss_bytes": 51380224
+      }
+    },
+    {
+      "signals": 1000000,
+      "new_signals": 900000,
+      "io": {
+        "written_bytes": 10287900000,
+        "read_bytes": 2124900000,
+        "publications": 5400000
+      },
+      "worker_peak_rss_bytes": {
+        "43": 40108032,
+        "44": 40370176,
+        "46": 39845888,
+        "40": 40108032,
+        "45": 39845888,
+        "38": 39845888,
+        "42": 40108032,
+        "51": 40108032,
+        "53": 39845888,
+        "41": 40370176,
+        "48": 40108032,
+        "47": 40370176,
+        "49": 39845888,
+        "50": 40108032,
+        "52": 39321600,
+        "39": 39583744
+      },
+      "worker_cpu_seconds": 2321.9629702670018,
+      "write_seconds": 2487.3422450460494,
+      "signals_per_second": 361.8319922770973,
+      "cumulative_write_seconds": 2665.225648765103,
+      "space_after_write": {
+        "bytes": 352647905280,
+        "inodes": 20223653
+      },
+      "queries": {
+        "cache_state": "OS cache retained; first pass follows ingestion",
+        "open_r": {
+          "samples": 100,
+          "total_seconds": 0.020672218990512192,
+          "mean_ms": 0.20672218990512192,
+          "p50_ms": 0.19415951101109385,
+          "p95_ms": 0.2648954279720783,
+          "p99_ms": 0.33084016060456833,
+          "max_ms": 0.7206120062619448
+        },
+        "open_a": {
+          "samples": 100,
+          "total_seconds": 0.03134043235331774,
+          "mean_ms": 0.3134043235331774,
+          "p50_ms": 0.30140054877847433,
+          "p95_ms": 0.35139417741447687,
+          "p99_ms": 0.4090862523298736,
+          "max_ms": 0.902823987416923
+        },
+        "exact_read_first_pass": {
+          "samples": 100,
+          "total_seconds": 0.06689877598546445,
+          "mean_ms": 0.6689877598546445,
+          "p50_ms": 0.6388089968822896,
+          "p95_ms": 1.0102186293806878,
+          "p99_ms": 1.3191770401317775,
+          "max_ms": 4.185825004242361
+        },
+        "exact_read_repeat": {
+          "samples": 100,
+          "total_seconds": 0.015321179293096066,
+          "mean_ms": 0.15321179293096066,
+          "p50_ms": 0.145567930303514,
+          "p95_ms": 0.1639890659134835,
+          "p99_ms": 0.2019324002321832,
+          "max_ms": 0.635692966170609
+        },
+        "extract_12_signals": {
+          "samples": 100,
+          "total_seconds": 0.7733233796898276,
+          "mean_ms": 7.733233796898276,
+          "p50_ms": 7.7476955484598875,
+          "p95_ms": 9.107990039046854,
+          "p99_ms": 9.541962136281656,
+          "max_ms": 9.758583968505263,
+          "signals_per_extraction": 12,
+          "records_per_extraction": 384
+        },
+        "search_exact_regex": {
+          "seconds": 232.53399385593366,
+          "matches": 1
+        },
+        "search_12_regex": {
+          "seconds": 42.399365875986405,
+          "matches": 12
+        },
+        "search_all": {
+          "seconds": 40.74628818000201,
+          "matches": 1000000
+        },
+        "peak_rss_bytes": 144388096
+      }
+    }
+  ],
+  "complete": true,
+  "space_before": {
+    "bytes": 397776957440,
+    "inodes": 32221769
+  },
+  "backend": {
+    "transport": "filesystem",
+    "filesystem": "ext4",
+    "profile": "local",
+    "coordination": "flock",
+    "publication": "atomic-replace"
+  },
+  "initialization_io": {
+    "read_bytes": 0,
+    "written_bytes": 4137,
+    "publications": 3
+  },
+  "sample_signal_storage": {
+    "files": 7,
+    "directories": 5,
+    "file_bytes": 11401,
+    "file_allocated_bytes": 24576,
+    "directory_allocated_bytes": 20480,
+    "categories": {
+      "catalog": {
+        "files": 3,
+        "bytes": 2341,
+        "allocated_bytes": 12288
+      },
+      "locks": {
+        "files": 1,
+        "bytes": 0,
+        "allocated_bytes": 0
+      },
+      "data_pages": {
+        "files": 1,
+        "bytes": 3250,
+        "allocated_bytes": 4096
+      },
+      "recovery_pages": {
+        "files": 2,
+        "bytes": 5810,
+        "allocated_bytes": 8192
+      }
+    }
+  },
+  "remaining_space_estimate": {
+    "bytes": 45010944000,
+    "inodes": 11988000
+  },
+  "retention_requested_during_run": true,
+  "storage": {
+    "files": 7000003,
+    "directories": 5000260,
+    "file_bytes": 11430337477,
+    "file_allocated_bytes": 24576012288,
+    "directory_allocated_bytes": 20587401216,
+    "categories": {
+      "catalog": {
+        "files": 3000001,
+        "bytes": 2360555849,
+        "allocated_bytes": 12288004096
+      },
+      "locks": {
+        "files": 1000000,
+        "bytes": 0,
+        "allocated_bytes": 0
+      },
+      "data_pages": {
+        "files": 1000000,
+        "bytes": 3259777780,
+        "allocated_bytes": 4096000000
+      },
+      "recovery_pages": {
+        "files": 2000002,
+        "bytes": 5810003848,
+        "allocated_bytes": 8192008192
+      }
+    }
+  },
+  "storage_scan_seconds": 492.1776048730826,
+  "payload_bytes": 512000000,
+  "total_write_seconds": 2665.225648765103,
+  "elapsed_before_cleanup_seconds": 3490.846459146007,
+  "retained": true,
+  "total_elapsed_seconds": 3490.8471536580473,
+  "storage_scan_pause_seconds": 149.74341654102318,
+  "storage_scan_active_seconds": 342.4341883320594,
+  "storage_scan_timing_note": "Raw scan duration includes a deliberate pause for separate cache experiments after baseline writes/queries; active duration subtracts only that pause."
+}

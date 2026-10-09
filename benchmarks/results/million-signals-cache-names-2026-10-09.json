@@ -1,0 +1,59 @@
+{
+  "mode": "names",
+  "signals": 1000000,
+  "cache_semantics": "quiescent read-only snapshot; no invalidation prototype",
+  "python": "3.14.6",
+  "records_per_signal": 32,
+  "names_load_seconds": 40.29975048196502,
+  "names_rss_bytes": 131223552,
+  "names_incremental_rss_bytes": 91758592,
+  "baseline_rss_bytes": 39464960,
+  "cache_rss_bytes": 131223552,
+  "cache_incremental_rss_bytes": 91758592,
+  "search_exact_regex": {
+    "samples": 10,
+    "total_seconds": 1.6131741260178387,
+    "mean_ms": 161.31741260178387,
+    "p50_ms": 161.183204036206,
+    "p95_ms": 163.07411588495597,
+    "p99_ms": 163.58447999460623,
+    "max_ms": 163.7120710220188
+  },
+  "search_12_regex": {
+    "samples": 10,
+    "total_seconds": 1.6946543731028214,
+    "mean_ms": 169.46543731028214,
+    "p50_ms": 166.21117253089324,
+    "p95_ms": 180.28766554780304,
+    "p99_ms": 181.71417309902608,
+    "max_ms": 182.07079998683184
+  },
+  "search_all": {
+    "samples": 10,
+    "total_seconds": 1.6832391719799489,
+    "mean_ms": 168.3239171979949,
+    "p50_ms": 161.77660546964034,
+    "p95_ms": 190.0678729463834,
+    "p99_ms": 191.27924415864982,
+    "max_ms": 191.5820869617164
+  },
+  "exact_read": {
+    "samples": 100,
+    "total_seconds": 0.4070888296701014,
+    "mean_ms": 4.070888296701014,
+    "p50_ms": 0.14192599337548018,
+    "p95_ms": 0.4371140734292566,
+    "p99_ms": 79.77103380952138,
+    "max_ms": 288.41222694609314
+  },
+  "extract_12_signals": {
+    "samples": 100,
+    "total_seconds": 0.4659701697528362,
+    "mean_ms": 4.659701697528362,
+    "p50_ms": 2.9782100464217365,
+    "p95_ms": 12.860199151327823,
+    "p99_ms": 28.579327837796917,
+    "max_ms": 35.420416039414704
+  },
+  "peak_rss_bytes": 141459456
+}
