@@ -17,6 +17,9 @@
 
 ### Added
 
+- [Store layout documentation](doc/store_layout.md) and repository conventions in
+  `AGENT.md`, including the requirement to maintain the layout alongside format
+  changes.
 - `DB.rebuild_catalog()` rebuilds the derived name catalog from HEADs and manifests
   without reading measurement pages. It also clears interrupted creation intents
   and unreferenced catalog shards.

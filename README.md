@@ -4,6 +4,8 @@ PageStore stores named time series in immutable, checksummed array pages. The ne
 API uses a filesystem catalog with per-signal coordination and no SQLite index.
 The design and remaining milestones are documented in
 [architecture.md](https://github.com/rdemaria/pagestore/blob/main/architecture.md).
+The implemented directory layout, indexes, binary pages, and recovery records are
+explained in [doc/store_layout.md](doc/store_layout.md).
 
 ## Installation and development
 
